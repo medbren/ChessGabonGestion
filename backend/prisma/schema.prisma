@@ -1,0 +1,105 @@
+// Génère le client Prisma utilisé dans le code TypeScript.
+// Ce client permet ensuite d'écrire des requêtes comme :
+// this.prisma.member.findMany()
+generator client {
+  provider = "prisma-client-js"
+}
+
+// Connexion à la base de données PostgreSQL.
+// L'URL réelle est stockée dans le fichier .env pour éviter de mettre
+// le mot de passe directement dans le code source.
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Rôles possibles pour les utilisateurs de l'application.
+// ADMIN : peut gérer les membres, tournois et imports.
+// MEMBER : rôle prévu pour un simple utilisateur.
+enum Role {
+  ADMIN
+  MEMBER
+}
+
+// Plateformes possibles pour un tournoi importé ou créé.
+enum Platform {
+  LICHESS
+  CHESSCOM
+  OTHER
+}
+
+// Cadences possibles des tournois.
+enum TimeControl {
+  BULLET
+  BLITZ
+  RAPID
+  CLASSICAL
+}
+
+// Utilisateur pouvant se connecter à l'administration.
+// Le mot de passe est stocké sous forme chiffrée avec bcrypt.
+model User {
+  id        Int      @id @default(autoincrement())
+  email     String   @unique
+  password  String
+  role      Role     @default(MEMBER)
+  createdAt DateTime @default(now())
+}
+
+// Membre/joueur de la communauté.
+// Un membre peut participer à plusieurs tournois.
+// Les champs lichess et chesscom permettent d'associer ses pseudos selon la plateforme.
+model Member {
+  id        Int      @id @default(autoincrement())
+  firstName String
+  lastName  String
+  pseudo    String   @unique
+  lichess   String?
+  chesscom  String?
+  createdAt DateTime @default(now())
+
+  // Relation : un membre peut avoir plusieurs résultats.
+  results   Result[]
+}
+
+// Tournoi importé ou créé par l'administrateur.
+// Chaque tournoi appartient à une plateforme et à une cadence.
+model Tournament {
+  id          Int         @id @default(autoincrement())
+  name        String
+  platform    Platform
+  timeControl TimeControl
+  date        DateTime
+
+  // Relation : un tournoi contient plusieurs résultats.
+  results     Result[]
+}
+
+// Résultat d'un joueur dans un tournoi.
+// Cette table fait le lien entre Member et Tournament.
+model Result {
+  id                 Int        @id @default(autoincrement())
+  memberId           Int
+  tournamentId       Int
+
+  // Score réel du joueur dans le tournoi, par exemple 7.5/9.
+  points             Float
+
+  // Points du championnat calculés selon le règlement interne :
+  // 1er = 20, 2e = 16, 3e = 13, ..., 11e et plus = 1.
+  championshipPoints Int        @default(0)
+
+  // Classement obtenu dans le tournoi.
+  rank               Int?
+
+  // Relation vers le membre.
+  // Si un membre est supprimé, ses résultats sont supprimés aussi.
+  member             Member     @relation(fields: [memberId], references: [id], onDelete: Cascade)
+
+  // Relation vers le tournoi.
+  // Si un tournoi est supprimé, ses résultats sont supprimés aussi.
+  tournament         Tournament @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+
+  // Un même joueur ne peut avoir qu'un seul résultat par tournoi.
+  @@unique([memberId, tournamentId])
+}
