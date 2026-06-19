@@ -3,14 +3,21 @@
 import { useEffect, useState } from 'react';
 
 export default function TournamentList() {
+  // Liste des tournois récupérés depuis le backend.
   const [tournaments, setTournaments] = useState<any[]>([]);
+
+  // Message d'information affiché après une action.
   const [message, setMessage] = useState('');
+
+  // Tournoi actuellement sélectionné pour modification.
   const [editingTournament, setEditingTournament] = useState<any | null>(null);
 
+  // Récupère le token JWT stocké après connexion.
   function getToken() {
     return localStorage.getItem('token');
   }
 
+  // Charge tous les tournois depuis l'API.
   async function loadTournaments() {
     const token = getToken();
 
@@ -21,9 +28,11 @@ export default function TournamentList() {
     });
 
     const data = await res.json();
+
     setTournaments(Array.isArray(data) ? data : []);
   }
 
+  // Modifie le tournoi actuellement sélectionné.
   async function updateTournament(event: any) {
     event.preventDefault();
 
@@ -45,6 +54,8 @@ export default function TournamentList() {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
+
+          // Authentification JWT.
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify(data),
@@ -53,15 +64,22 @@ export default function TournamentList() {
 
     if (res.ok) {
       setMessage('Tournoi modifié avec succès');
+
+      // Fermeture du formulaire de modification.
       setEditingTournament(null);
+
+      // Rechargement de la liste.
       loadTournaments();
     } else {
       setMessage('Erreur lors de la modification du tournoi');
     }
   }
 
+  // Supprime un tournoi après confirmation utilisateur.
   async function deleteTournament(id: number) {
-    const confirmed = confirm('Voulez-vous vraiment supprimer ce tournoi ?');
+    const confirmed = confirm(
+      'Voulez-vous vraiment supprimer ce tournoi ?'
+    );
 
     if (!confirmed) return;
 
@@ -76,12 +94,15 @@ export default function TournamentList() {
 
     if (res.ok) {
       setMessage('Tournoi supprimé avec succès');
+
+      // Actualisation de la liste après suppression.
       loadTournaments();
     } else {
       setMessage('Erreur lors de la suppression du tournoi');
     }
   }
 
+  // Chargement automatique des tournois au démarrage du composant.
   useEffect(() => {
     loadTournaments();
   }, []);
@@ -92,6 +113,8 @@ export default function TournamentList() {
 
       <p>{message}</p>
 
+      {/* Formulaire de modification affiché uniquement
+          lorsqu'un tournoi est sélectionné */}
       {editingTournament && (
         <>
           <h3>Modifier un tournoi</h3>
@@ -106,7 +129,10 @@ export default function TournamentList() {
             </p>
 
             <p>
-              <select name="platform" defaultValue={editingTournament.platform}>
+              <select
+                name="platform"
+                defaultValue={editingTournament.platform}
+              >
                 <option value="LICHESS">Lichess</option>
                 <option value="CHESSCOM">Chess.com</option>
                 <option value="OTHER">Autre</option>
@@ -114,7 +140,10 @@ export default function TournamentList() {
             </p>
 
             <p>
-              <select name="timeControl" defaultValue={editingTournament.timeControl}>
+              <select
+                name="timeControl"
+                defaultValue={editingTournament.timeControl}
+              >
                 <option value="BULLET">Bullet</option>
                 <option value="BLITZ">Blitz</option>
                 <option value="RAPID">Rapide</option>
@@ -131,8 +160,14 @@ export default function TournamentList() {
               />
             </p>
 
-            <button type="submit">Enregistrer</button>{' '}
-            <button type="button" onClick={() => setEditingTournament(null)}>
+            <button type="submit">
+              Enregistrer
+            </button>{' '}
+
+            <button
+              type="button"
+              onClick={() => setEditingTournament(null)}
+            >
               Annuler
             </button>
           </form>
@@ -141,6 +176,7 @@ export default function TournamentList() {
         </>
       )}
 
+      {/* Tableau des tournois enregistrés */}
       <table border={1} cellPadding={8}>
         <thead>
           <tr>
@@ -161,13 +197,27 @@ export default function TournamentList() {
               <td>{tournament.name}</td>
               <td>{tournament.platform}</td>
               <td>{tournament.timeControl}</td>
-              <td>{new Date(tournament.date).toLocaleDateString()}</td>
-              <td>{tournament.results?.length ?? 0}</td>
+
+              {/* Conversion de la date PostgreSQL en date lisible */}
               <td>
-                <button onClick={() => setEditingTournament(tournament)}>
+                {new Date(tournament.date).toLocaleDateString()}
+              </td>
+
+              {/* Nombre de résultats enregistrés dans ce tournoi */}
+              <td>
+                {tournament.results?.length ?? 0}
+              </td>
+
+              <td>
+                <button
+                  onClick={() => setEditingTournament(tournament)}
+                >
                   Modifier
                 </button>{' '}
-                <button onClick={() => deleteTournament(tournament.id)}>
+
+                <button
+                  onClick={() => deleteTournament(tournament.id)}
+                >
                   Supprimer
                 </button>
               </td>

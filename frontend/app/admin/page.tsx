@@ -15,6 +15,13 @@ export default function AdminPage() {
   const [editingMember, setEditingMember] = useState<any | null>(null);
   const [selectedMember, setSelectedMember] = useState<any | null>(null);
 
+  // Recherche dans la liste des membres (bts)
+  const [searchTerm, setSearchTerm] = useState('');
+
+  // Tri par colonne (bts)
+  const [sortColumn, setSortColumn] = useState('pseudo');
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
+
   function getToken() {
     return localStorage.getItem('token');
   }
@@ -152,6 +159,36 @@ export default function AdminPage() {
     }
   }
 
+  function sortBy(column: string) {
+    if (sortColumn === column) {
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortColumn(column);
+      setSortDirection('asc');
+    }
+  }
+
+  const filteredAndSortedMembers = members
+    .filter((member) => {
+      const search = searchTerm.toLowerCase();
+
+      return (
+        member.pseudo?.toLowerCase().includes(search) ||
+        member.firstName?.toLowerCase().includes(search) ||
+        member.lastName?.toLowerCase().includes(search) ||
+        member.lichess?.toLowerCase().includes(search) ||
+        member.chesscom?.toLowerCase().includes(search)
+      );
+    })
+    .sort((a, b) => {
+      const valueA = String(a[sortColumn] ?? '').toLowerCase();
+      const valueB = String(b[sortColumn] ?? '').toLowerCase();
+
+      if (valueA < valueB) return sortDirection === 'asc' ? -1 : 1;
+      if (valueA > valueB) return sortDirection === 'asc' ? 1 : -1;
+      return 0;
+    });
+
   if (!ready) {
     return <p>Vérification de la connexion...</p>;
   }
@@ -199,20 +236,28 @@ export default function AdminPage() {
 
       <h2>Liste des membres</h2>
 
+      <p>
+        <input
+          placeholder="Rechercher un joueur..."
+          value={searchTerm}
+          onChange={(event) => setSearchTerm(event.target.value)}
+        />
+      </p>
+
       <table border={1} cellPadding={8}>
         <thead>
           <tr>
-            <th>ID</th>
-            <th>Pseudo</th>
-            <th>Nom</th>
-            <th>Lichess</th>
-            <th>Chess.com</th>
+            <th onClick={() => sortBy('id')}>ID</th>
+            <th onClick={() => sortBy('pseudo')}>Pseudo</th>
+            <th onClick={() => sortBy('firstName')}>Nom</th>
+            <th onClick={() => sortBy('lichess')}>Lichess</th>
+            <th onClick={() => sortBy('chesscom')}>Chess.com</th>
             <th>Actions</th>
           </tr>
         </thead>
 
         <tbody>
-          {members.map((member) => (
+          {filteredAndSortedMembers.map((member) => (
             <tr key={member.id}>
               <td>{member.id}</td>
               <td>{member.pseudo}</td>

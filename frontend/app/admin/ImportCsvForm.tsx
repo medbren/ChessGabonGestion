@@ -2,6 +2,8 @@
 
 import { useState } from 'react';
 
+// Représente une ligne lue depuis un fichier CSV.
+// Chaque ligne contient le rang, le pseudo et le score du joueur.
 type CsvRow = {
   rank: number;
   pseudo: string;
@@ -9,12 +11,20 @@ type CsvRow = {
 };
 
 export default function ImportCsvForm() {
+  // Message affiché à l'utilisateur après un import ou une erreur.
   const [message, setMessage] = useState('');
 
+  // Récupère le token JWT stocké dans le navigateur après connexion admin.
+  // Ce token est nécessaire pour appeler les routes protégées du backend.
   function getToken() {
     return localStorage.getItem('token');
   }
 
+  // Analyse le contenu du fichier CSV.
+  // Cette fonction reconnaît plusieurs formats :
+  // - CSV générique : rank,pseudo,points
+  // - Lichess : Rank,Username,Points
+  // - Chess.com : Rk,Username,Score
   function parseCsv(text: string): CsvRow[] {
     const lines = text.trim().split('\n').filter(Boolean);
 
@@ -22,8 +32,10 @@ export default function ImportCsvForm() {
       throw new Error('Fichier CSV vide ou invalide');
     }
 
+    // Lecture de la première ligne du fichier CSV : les en-têtes.
     const headers = lines[0].split(',').map((h) => h.trim().replace(/"/g, ''));
 
+    // Recherche de la colonne du rang selon le format du fichier.
     const rankIndex =
       headers.indexOf('rank') !== -1
         ? headers.indexOf('rank')
@@ -31,11 +43,13 @@ export default function ImportCsvForm() {
         ? headers.indexOf('Rank')
         : headers.indexOf('Rk');
 
+    // Recherche de la colonne du pseudo.
     const pseudoIndex =
       headers.indexOf('pseudo') !== -1
         ? headers.indexOf('pseudo')
         : headers.indexOf('Username');
 
+    // Recherche de la colonne du score.
     const pointsIndex =
       headers.indexOf('points') !== -1
         ? headers.indexOf('points')
@@ -43,10 +57,12 @@ export default function ImportCsvForm() {
         ? headers.indexOf('Points')
         : headers.indexOf('Score');
 
+    // Si une colonne obligatoire est absente, on arrête l'import.
     if (rankIndex === -1 || pseudoIndex === -1 || pointsIndex === -1) {
       throw new Error('Format CSV non reconnu');
     }
 
+    // Transformation de chaque ligne CSV en objet TypeScript.
     return lines.slice(1).map((line) => {
       const columns = line.split(',').map((c) => c.trim().replace(/"/g, ''));
 
@@ -58,6 +74,8 @@ export default function ImportCsvForm() {
     });
   }
 
+  // Recherche si un joueur existe déjà dans la base.
+  // Cela évite les doublons lors de l'import.
   function findExistingMember(members: any[], platform: string, pseudo: string) {
     const normalizedPseudo = pseudo.toLowerCase();
 
@@ -66,18 +84,24 @@ export default function ImportCsvForm() {
       const lichessPseudo = member.lichess?.toLowerCase();
       const chesscomPseudo = member.chesscom?.toLowerCase();
 
+      // Si le tournoi vient de Lichess,
+      // on compare avec le pseudo Lichess et le pseudo interne.
       if (platform === 'LICHESS') {
         return lichessPseudo === normalizedPseudo || internalPseudo === normalizedPseudo;
       }
 
+      // Si le tournoi vient de Chess.com,
+      // on compare avec le pseudo Chess.com et le pseudo interne.
       if (platform === 'CHESSCOM') {
         return chesscomPseudo === normalizedPseudo || internalPseudo === normalizedPseudo;
       }
 
+      // Pour un CSV générique, on compare seulement avec le pseudo interne.
       return internalPseudo === normalizedPseudo;
     });
   }
 
+  // Fonction principale appelée lors de l'import du fichier.
   async function importCsv(event: any) {
     event.preventDefault();
 
@@ -93,6 +117,7 @@ export default function ImportCsvForm() {
     try {
       const platform = form.platform.value;
 
+      // 1. Création du tournoi dans la base de données.
       const tournamentRes = await fetch('http://localhost:3001/tournaments', {
         method: 'POST',
         headers: {
@@ -114,9 +139,13 @@ export default function ImportCsvForm() {
 
       const tournament = await tournamentRes.json();
 
+      // 2. Lecture du fichier CSV dans le navigateur.
       const text = await file.text();
+
+      // 3. Transformation du CSV en lignes exploitables.
       const rows = parseCsv(text);
 
+      // 4. Chargement des membres déjà existants.
       const membersRes = await fetch('http://localhost:3001/members', {
         headers: {
           Authorization: `Bearer ${token}`,
@@ -130,9 +159,14 @@ export default function ImportCsvForm() {
 
       let members = await membersRes.json();
 
+      // 5. Pour chaque ligne du CSV :
+      // - chercher le membre
+      // - le créer s'il n'existe pas
+      // - enregistrer son résultat
       for (const row of rows) {
         let member = findExistingMember(members, platform, row.pseudo);
 
+        // Si le joueur n'existe pas encore, on le crée automatiquement.
         if (!member) {
           const createMemberRes = await fetch('http://localhost:3001/members', {
             method: 'POST',
@@ -155,9 +189,15 @@ export default function ImportCsvForm() {
           }
 
           member = await createMemberRes.json();
+
+          // On ajoute le nouveau membre à la liste locale
+          // pour éviter de le recréer si son pseudo apparaît encore.
           members.push(member);
         }
 
+        // 6. Enregistrement du résultat du joueur dans le tournoi.
+        // Le backend calcule ensuite automatiquement les points championnat
+        // à partir du rang.
         const resultRes = await fetch(
           `http://localhost:3001/tournaments/${tournament.id}/results`,
           {

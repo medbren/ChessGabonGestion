@@ -3,145 +3,127 @@
 import { useEffect, useState } from 'react';
 
 export default function HomePage() {
-  // Liste des joueurs du classement actuellement affiché.
   const [rankings, setRankings] = useState<any[]>([]);
-
-  // Titre du classement affiché.
   const [title, setTitle] = useState('Classement général');
 
-  // =====================================================
-  // CHARGEMENT D'UN CLASSEMENT
-  // =====================================================
-  //
-  // Cette fonction appelle l'API backend et récupère
-  // les données du classement demandé.
-  //
-  // Exemple :
-  // - Général
-  // - Blitz
-  // - Rapide
-  // - Mensuel
-  // - Annuel
-  async function loadRankings(
-    url: string,
-    newTitle: string,
-  ) {
+  async function loadRankings(url: string, newTitle: string) {
     const res = await fetch(url);
-
     const data = await res.json();
 
-    setRankings(
-      Array.isArray(data) ? data : [],
-    );
-
+    setRankings(Array.isArray(data) ? data : []);
     setTitle(newTitle);
   }
 
-  // =====================================================
-  // CHARGEMENT INITIAL
-  // =====================================================
-  //
-  // Lors de l'ouverture de la page,
-  // le classement général est chargé automatiquement.
-  useEffect(() => {
-    loadRankings(
-      'http://localhost:3001/rankings',
-      'Classement général',
+  function downloadCsv(data: any[], filename: string) {
+    const headers = [
+      'Rang',
+      'Pseudo',
+      'Nom',
+      'Points championnat',
+      'Score brut cumule',
+      'Tournois',
+    ];
+
+    const rows = data.map((player) => [
+      player.rank,
+      player.pseudo,
+      player.fullName,
+      player.points,
+      player.rawPoints,
+      player.tournaments,
+    ]);
+
+    const csvContent = [
+      headers.join(','),
+      ...rows.map((row) => row.join(',')),
+    ].join('\n');
+
+    const blob = new Blob([csvContent], {
+      type: 'text/csv;charset=utf-8;',
+    });
+
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+
+    link.href = url;
+    link.download = filename;
+    link.click();
+
+    URL.revokeObjectURL(url);
+  }
+
+  async function exportMonthlyCsv() {
+    const res = await fetch(
+      'http://localhost:3001/rankings?type=monthly&month=6&year=2026'
     );
+
+    const data = await res.json();
+
+    if (Array.isArray(data)) {
+      downloadCsv(data, 'classement_mensuel_06_2026.csv');
+    }
+  }
+
+  async function exportYearlyCsv() {
+    const res = await fetch(
+      'http://localhost:3001/rankings?type=yearly&year=2026'
+    );
+
+    const data = await res.json();
+
+    if (Array.isArray(data)) {
+      downloadCsv(data, 'classement_annuel_2026.csv');
+    }
+  }
+
+  useEffect(() => {
+    loadRankings('http://localhost:3001/rankings', 'Classement général');
   }, []);
 
   return (
-    <main
-      style={{
-        maxWidth: '950px',
-        margin: '40px auto',
-      }}
-    >
+    <main style={{ maxWidth: '950px', margin: '40px auto' }}>
       <h1>ChessGabonGestion</h1>
 
       <p>
-        Gestion des tournois,
-        imports CSV Lichess/Chess.com
-        et classements annuels.
+        Gestion des tournois, imports CSV Lichess/Chess.com et classements
+        annuels.
       </p>
 
-      {/* =======================================
-          BOUTONS DE FILTRE
-      ======================================= */}
-
       <p>
-        {/* Classement général */}
-        <button
-          onClick={() =>
-            loadRankings(
-              'http://localhost:3001/rankings',
-              'Classement général',
-            )
-          }
-        >
+        <button onClick={() => loadRankings('http://localhost:3001/rankings', 'Classement général')}>
           Général
         </button>{' '}
 
-        {/* Classement Blitz */}
-        <button
-          onClick={() =>
-            loadRankings(
-              'http://localhost:3001/rankings?timeControl=BLITZ',
-              'Classement Blitz',
-            )
-          }
-        >
+        <button onClick={() => loadRankings('http://localhost:3001/rankings?timeControl=BLITZ', 'Classement Blitz')}>
           Blitz
         </button>{' '}
 
-        {/* Classement Rapide */}
-        <button
-          onClick={() =>
-            loadRankings(
-              'http://localhost:3001/rankings?timeControl=RAPID',
-              'Classement Rapide',
-            )
-          }
-        >
+        <button onClick={() => loadRankings('http://localhost:3001/rankings?timeControl=RAPID', 'Classement Rapide')}>
           Rapide
         </button>{' '}
 
-        {/* Classement du mois */}
-        <button
-          onClick={() =>
-            loadRankings(
-              'http://localhost:3001/rankings?type=monthly&month=6&year=2026',
-              'Classement mensuel - Juin 2026',
-            )
-          }
-        >
+        <button onClick={() => loadRankings('http://localhost:3001/rankings?type=monthly&month=6&year=2026', 'Classement mensuel - Juin 2026')}>
           Mensuel
         </button>{' '}
 
-        {/* Classement annuel */}
-        <button
-          onClick={() =>
-            loadRankings(
-              'http://localhost:3001/rankings?type=yearly&year=2026',
-              'Classement annuel - 2026',
-            )
-          }
-        >
+        <button onClick={() => loadRankings('http://localhost:3001/rankings?type=yearly&year=2026', 'Classement annuel - 2026')}>
           Annuel
         </button>{' '}
 
-        {/* Accès à l'administration */}
-        <a href="/login">
-          Administration
-        </a>
+        <a href="/login">Administration</a>
       </p>
 
-      {/* Titre du classement affiché */}
-      <h2>{title}</h2>
+      <p>
+        <button onClick={exportMonthlyCsv}>
+          Exporter mensuel CSV
+        </button>{' '}
 
-      {/* =======================================
-          TABLEAU DES CLASSEMENTS
-      ======================================= */}
+        <button onClick={exportYearlyCsv}>
+          Exporter annuel CSV
+        </button>
+      </p>
+
+      <h2>{title}</h2>
 
       <table border={1} cellPadding={8}>
         <thead>
@@ -149,15 +131,8 @@ export default function HomePage() {
             <th>Rang</th>
             <th>Joueur</th>
             <th>Nom</th>
-
-            {/* Points utilisés pour le championnat */}
             <th>Points championnat</th>
-
-            {/* Somme des scores réels obtenus
-                dans les tournois */}
             <th>Score brut cumulé</th>
-
-            {/* Nombre de tournois joués */}
             <th>Tournois</th>
           </tr>
         </thead>
@@ -166,15 +141,10 @@ export default function HomePage() {
           {rankings.map((player) => (
             <tr key={player.id}>
               <td>{player.rank}</td>
-
               <td>{player.pseudo}</td>
-
               <td>{player.fullName}</td>
-
               <td>{player.points}</td>
-
               <td>{player.rawPoints}</td>
-
               <td>{player.tournaments}</td>
             </tr>
           ))}

@@ -3,14 +3,21 @@
 import { useState } from 'react';
 
 export default function TournamentForm() {
+  // Message affiché après la création du tournoi
+  // ou en cas d'erreur.
   const [message, setMessage] = useState('');
 
+  // Fonction appelée lors de la soumission du formulaire.
   async function createTournament(event: any) {
     event.preventDefault();
 
+    // Récupération du token JWT stocké après connexion.
     const token = localStorage.getItem('token');
+
+    // Récupération du formulaire HTML.
     const form = event.target;
 
+    // Construction de l'objet tournoi à envoyer au backend.
     const data = {
       name: form.name.value,
       platform: form.platform.value,
@@ -18,19 +25,26 @@ export default function TournamentForm() {
       date: form.date.value,
     };
 
+    // Appel de l'API NestJS pour créer le tournoi.
     const res = await fetch('http://localhost:3001/tournaments', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+
+        // Authentification JWT obligatoire.
         Authorization: `Bearer ${token}`,
       },
       body: JSON.stringify(data),
     });
 
+    // Si la création a réussi.
     if (res.ok) {
       setMessage('Tournoi créé avec succès');
+
+      // Réinitialisation du formulaire.
       form.reset();
     } else {
+      // Affichage de l'erreur renvoyée par le backend.
       const error = await res.text();
       setMessage(`Erreur : ${error}`);
     }
@@ -40,6 +54,7 @@ export default function TournamentForm() {
     <section>
       <h2>Créer un tournoi</h2>
 
+      {/* Formulaire de création d'un tournoi */}
       <form onSubmit={createTournament}>
         <p>
           <input
@@ -49,6 +64,7 @@ export default function TournamentForm() {
           />
         </p>
 
+        {/* Plateforme d'origine du tournoi */}
         <p>
           <select name="platform">
             <option value="LICHESS">Lichess</option>
@@ -57,6 +73,7 @@ export default function TournamentForm() {
           </select>
         </p>
 
+        {/* Cadence du tournoi */}
         <p>
           <select name="timeControl">
             <option value="BULLET">Bullet</option>
@@ -66,6 +83,7 @@ export default function TournamentForm() {
           </select>
         </p>
 
+        {/* Date du tournoi */}
         <p>
           <input
             type="date"
@@ -79,6 +97,7 @@ export default function TournamentForm() {
         </button>
       </form>
 
+      {/* Message d'information affiché après l'action */}
       <p>{message}</p>
     </section>
   );
