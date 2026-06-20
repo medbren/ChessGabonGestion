@@ -1,343 +1,454 @@
 'use client';
 
-import { useState, useRef } from 'react';
-import { useRouter } from 'next/navigation';
+import { useEffect, useState, useCallback } from 'react';
 
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
-const GREEN  = '#009E60';
-const GREEN_DARK = '#007A4A';
+/* ─── Types ─────────────────────────────────────────────── */
 
-/* ─── Types ────────────────────────────────────────────────── */
-
-interface LoginResponse {
-  accessToken: string;
-  user: unknown;
+interface Player {
+  id: string | number;
+  rank: number;
+  pseudo: string;
+  fullName: string;
+  points: number;
+  rawPoints: number;
+  tournaments: number;
 }
 
-type Status = 'idle' | 'loading' | 'error';
+interface Filter {
+  label: string;
+  query: string;
+  icon: string;
+}
 
-/* ─── Component ─────────────────────────────────────────────── */
+/* ─── Constants ─────────────────────────────────────────── */
 
-export default function LoginPage() {
-  const router  = useRouter();
-  const emailRef    = useRef<HTMLInputElement>(null);
-  const passwordRef = useRef<HTMLInputElement>(null);
+const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
 
-  const [status,  setStatus]  = useState<Status>('idle');
-  const [message, setMessage] = useState('');
-  const [showPwd, setShowPwd] = useState(false);
+const FILTERS: Filter[] = [
+  { label: 'Général',  query: '',                                    icon: '🏆' },
+  { label: 'Blitz',    query: '?timeControl=BLITZ',                  icon: '⚡' },
+  { label: 'Rapide',   query: '?timeControl=RAPID',                  icon: '⏱' },
+  { label: 'Mensuel',  query: '?type=monthly&month=6&year=2026',     icon: '📅' },
+  { label: 'Annuel',   query: '?type=yearly&year=2026',              icon: '📊' },
+];
 
-  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
+/* ─── Helpers ───────────────────────────────────────────── */
+
+function getInitials(name: string): string {
+  return name
+    .split(' ')
+    .map((w) => w[0] ?? '')
+    .join('')
+    .slice(0, 2)
+    .toUpperCase();
+}
+
+function RankBadge({ rank }: { rank: number }) {
+  const base: React.CSSProperties = {
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: 28,
+    height: 28,
+    borderRadius: '50%',
+    fontSize: 13,
+    fontWeight: 500,
+  };
+
+  if (rank === 1) return <span style={{ ...base, background: '#FCD116', color: '#7a5a00' }}>{rank}</span>;
+  if (rank === 2) return <span style={{ ...base, background: '#d1d1d1', color: '#444' }}>{rank}</span>;
+  if (rank === 3) return <span style={{ ...base, background: '#d4a76a', color: '#6b3d00' }}>{rank}</span>;
+  return <span style={{ ...base, background: '#F0F2F5', color: '#666' }}>{rank}</span>;
+}
+
+function Avatar({ name }: { name: string }) {
+  return (
+    <span style={styles.avatar}>{getInitials(name)}</span>
+  );
+}
+
+/* ─── Sub-components ─────────────────────────────────────── */
+
+function EmptyState({ message }: { message: string }) {
+  return (
+    <div style={styles.emptyState}>
+      <span style={{ fontSize: 32, display: 'block', marginBottom: 8 }}>♟</span>
+      {message}
+    </div>
+  );
+}
+
+function Spinner() {
+  return <span style={styles.spinner} aria-hidden="true" />;
+}
+
+function TableRow({ player }: { player: Player }) {
+  return (
+    <tr style={styles.row}>
+      <td style={styles.tdCenter}>
+        <RankBadge rank={player.rank} />
+      </td>
+      <td>
+        <div style={styles.pseudoCell}>
+          <Avatar name={player.fullName ?? player.pseudo} />
+          <span style={styles.pseudoText}>{player.pseudo || '—'}</span>
+        </div>
+      </td>
+      <td style={styles.fullName}>{player.fullName || '—'}</td>
+      <td style={styles.tdRight}>
+        <span style={styles.pointsVal}>{player.points ?? '—'}</span>
+      </td>
+      <td style={styles.tdRight}>
+        <span style={styles.rawVal}>{player.rawPoints ?? '—'}</span>
+      </td>
+      <td style={styles.tdRight}>
+        <span style={styles.tournBadge}>♞ {player.tournaments ?? 0}</span>
+      </td>
+    </tr>
+  );
+}
+
+/* ─── Main component ─────────────────────────────────────── */
+
+export default function HomePage() {
+  const [rankings, setRankings] = useState<Player[]>([]);
+  const [activeFilter, setActiveFilter] = useState<Filter>(FILTERS[0]);
+  const [status, setStatus] = useState<'idle' | 'loading' | 'error'>('loading');
+
+  const loadRankings = useCallback(async (filter: Filter) => {
+    setActiveFilter(filter);
     setStatus('loading');
-    setMessage('');
+    setRankings([]);
 
     try {
-      const res = await fetch(`${BASE_URL}/auth/login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email:    emailRef.current?.value,
-          password: passwordRef.current?.value,
-        }),
-      });
-
-      if (res.status === 401) {
-        setMessage('Email ou mot de passe incorrect.');
-        setStatus('error');
-        return;
-      }
-
-      if (!res.ok) {
-        setMessage(`Erreur serveur (${res.status}). Réessayez plus tard.`);
-        setStatus('error');
-        return;
-      }
-
-      const data = (await res.json()) as LoginResponse;
-      localStorage.setItem('token', data.accessToken);
-      localStorage.setItem('user', JSON.stringify(data.user));
-      router.push('/admin');
+      const res = await fetch(`${BASE_URL}/rankings${filter.query}`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data: unknown = await res.json();
+      setRankings(Array.isArray(data) ? (data as Player[]) : []);
+      setStatus('idle');
     } catch {
-      setMessage('Impossible de contacter le serveur. Vérifiez votre connexion.');
       setStatus('error');
     }
-  }
+  }, []);
 
-  const isLoading = status === 'loading';
+  useEffect(() => {
+    void loadRankings(FILTERS[0]);
+  }, [loadRankings]);
 
   return (
     <main style={styles.page}>
-      {/* ── Card ── */}
-      <div style={styles.card}>
-
-        {/* Logo */}
+      {/* ── Header ── */}
+      <header style={styles.header}>
         <div style={styles.logoWrap}>
           <div style={styles.logoIcon}>♟</div>
-          <span style={styles.logoText}>
-            <span style={{ color: GREEN }}>Chess</span>Gabon
+          <h1 style={styles.logoText}>
+            <span style={styles.logoAccent}>Chess</span>
+            Gabon
             <span style={styles.logoMuted}>Gestion</span>
-          </span>
+          </h1>
         </div>
+        <p style={styles.subtitle}>Gestion des tournois &amp; classements officiels du club</p>
+      </header>
 
-        <h1 style={styles.heading}>Connexion administrateur</h1>
-        <p style={styles.hint}>Accès réservé aux membres du bureau.</p>
-
-        {/* Form */}
-        <form onSubmit={handleSubmit} noValidate style={styles.form}>
-
-          {/* Email */}
-          <div style={styles.field}>
-            <label htmlFor="email" style={styles.label}>Adresse e-mail</label>
-            <div style={styles.inputWrap}>
-              <span style={styles.inputIcon} aria-hidden="true">✉</span>
-              <input
-                id="email"
-                ref={emailRef}
-                type="email"
-                autoComplete="email"
-                placeholder="admin@chessgabon.ga"
-                required
-                disabled={isLoading}
-                style={styles.input}
-              />
-            </div>
-          </div>
-
-          {/* Password */}
-          <div style={styles.field}>
-            <label htmlFor="password" style={styles.label}>Mot de passe</label>
-            <div style={styles.inputWrap}>
-              <span style={styles.inputIcon} aria-hidden="true">🔒</span>
-              <input
-                id="password"
-                ref={passwordRef}
-                type={showPwd ? 'text' : 'password'}
-                autoComplete="current-password"
-                placeholder="••••••••"
-                required
-                disabled={isLoading}
-                style={{ ...styles.input, paddingRight: 44 }}
-              />
-              <button
-                type="button"
-                onClick={() => setShowPwd((v) => !v)}
-                style={styles.eyeBtn}
-                aria-label={showPwd ? 'Masquer le mot de passe' : 'Afficher le mot de passe'}
-              >
-                {showPwd ? '🙈' : '👁'}
-              </button>
-            </div>
-          </div>
-
-          {/* Error message */}
-          {status === 'error' && (
-            <div role="alert" style={styles.errorBox}>
-              ⚠ {message}
-            </div>
-          )}
-
-          {/* Submit */}
+      {/* ── Filters ── */}
+      <nav aria-label="Filtres de classement" style={styles.filtersRow}>
+        {FILTERS.map((f) => (
           <button
-            type="submit"
-            disabled={isLoading}
-            style={{ ...styles.submitBtn, ...(isLoading ? styles.submitBtnDisabled : {}) }}
+            key={f.label}
+            style={{
+              ...styles.filterBtn,
+              ...(activeFilter.label === f.label ? styles.filterBtnActive : {}),
+            }}
+            onClick={() => void loadRankings(f)}
+            aria-pressed={activeFilter.label === f.label}
           >
-            {isLoading
-              ? <><span style={styles.spinner} aria-hidden="true" /> Connexion…</>
-              : 'Se connecter'}
+            {f.icon} {f.label}
           </button>
-        </form>
+        ))}
 
-        {/* Footer */}
-        <p style={styles.footer}>
-          <a href="/" style={styles.backLink}>← Retour au classement</a>
-        </p>
+        <a href="/login" style={styles.adminBtn}>
+          ⚙ Administration
+        </a>
+      </nav>
+
+      {/* ── Section bar ── */}
+      <div style={styles.sectionBar}>
+        <span style={styles.sectionTitle}>
+          # Classement {activeFilter.label}
+        </span>
+        <span style={styles.countBadge}>
+          {status === 'loading' ? '…' : `${rankings.length} joueur${rankings.length !== 1 ? 's' : ''}`}
+        </span>
+      </div>
+
+      {/* ── Table ── */}
+      <div style={styles.tableCard}>
+        {status === 'loading' && (
+          <div style={styles.emptyState}>
+            <Spinner /> Chargement…
+          </div>
+        )}
+
+        {status === 'error' && (
+          <EmptyState message="Impossible de contacter le serveur. Vérifiez votre connexion." />
+        )}
+
+        {status === 'idle' && rankings.length === 0 && (
+          <EmptyState message="Aucun joueur dans ce classement." />
+        )}
+
+        {status === 'idle' && rankings.length > 0 && (
+          <div style={styles.tableWrapper}>
+            <table style={styles.table}>
+              <thead>
+                <tr style={styles.theadRow}>
+                  <th style={{ ...styles.th, ...styles.tdCenter, width: 60 }}>Rang</th>
+                  <th style={styles.th}>Joueur</th>
+                  <th style={styles.th}>Nom complet</th>
+                  <th style={{ ...styles.th, ...styles.tdRight }}>Points</th>
+                  <th style={{ ...styles.th, ...styles.tdRight }}>Score brut</th>
+                  <th style={{ ...styles.th, ...styles.tdRight }}>Tournois</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rankings.map((p) => (
+                  <TableRow key={p.id} player={p} />
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
     </main>
   );
 }
 
-/* ─── Styles ─────────────────────────────────────────────────── */
+/* ─── Styles ─────────────────────────────────────────────── */
+
+const GREEN  = '#009E60';
+const BLUE   = '#3A75C4';
+const YELLOW = '#FCD116';
 
 const styles: Record<string, React.CSSProperties> = {
+  /* layout */
   page: {
-    minHeight: '100vh',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    background: '#F7F9FC',
-    padding: '24px 16px',
+    maxWidth: 980,
+    margin: '40px auto',
+    padding: '0 16px 60px',
+    fontFamily: 'Inter, Arial, sans-serif',
+    color: '#1a1a1a',
   },
 
-  card: {
-    width: '100%',
-    maxWidth: 420,
-    background: '#fff',
-    borderRadius: 16,
-    borderWidth: 1,
-    borderStyle: 'solid',
-    borderColor: '#E8EBF0',
-    padding: '2.5rem 2rem',
+  /* header */
+  header: {
+    textAlign: 'center',
+    padding: '2rem 0 1.5rem',
+    borderBottom: '1px solid #E8EBF0',
+    marginBottom: '1.5rem',
   },
-
-  /* logo */
   logoWrap: {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 10,
-    marginBottom: '1.5rem',
+    marginBottom: 6,
   },
   logoIcon: {
-    width: 38,
-    height: 38,
+    width: 40,
+    height: 40,
     background: GREEN,
-    borderRadius: 9,
+    borderRadius: 10,
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
     color: '#fff',
-    fontSize: 20,
+    fontSize: 22,
   },
   logoText: {
-    fontSize: 20,
+    fontSize: 22,
     fontWeight: 500,
+    margin: 0,
     letterSpacing: '-0.3px',
-    color: '#1a1a1a',
   },
-  logoMuted: {
-    color: '#888',
-    fontWeight: 400,
+  logoAccent: { color: GREEN },
+  logoMuted:  { color: '#888', fontWeight: 400 },
+  subtitle: {
+    fontSize: 14,
+    color: '#666',
+    margin: 0,
   },
 
-  /* headings */
-  heading: {
-    fontSize: 20,
-    fontWeight: 500,
-    color: '#1a1a1a',
-    textAlign: 'center',
-    margin: '0 0 6px',
-  },
-  hint: {
-    fontSize: 13,
-    color: '#888',
-    textAlign: 'center',
-    margin: '0 0 1.75rem',
-  },
-
-  /* form */
-  form: {
+  /* filters */
+  filtersRow: {
     display: 'flex',
-    flexDirection: 'column',
-    gap: 16,
+    flexWrap: 'wrap',
+    gap: 8,
+    justifyContent: 'center',
+    marginBottom: '1.5rem',
   },
-  field: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: 6,
-  },
-  label: {
-    fontSize: 13,
-    fontWeight: 500,
-    color: '#444',
-  },
-  inputWrap: {
-    position: 'relative',
-    display: 'flex',
-    alignItems: 'center',
-  },
-  inputIcon: {
-    position: 'absolute',
-    left: 12,
-    fontSize: 14,
-    pointerEvents: 'none',
-    color: '#aaa',
-  },
-  input: {
-    width: '100%',
-    padding: '10px 12px 10px 36px',
-    fontSize: 14,
-    fontFamily: 'Inter, Arial, sans-serif',
-    color: '#1a1a1a',
-    background: '#F7F9FC',
+  filterBtn: {
+    background: '#F5F7FA',
+    color: '#555',
     borderWidth: 1,
     borderStyle: 'solid',
     borderColor: '#E0E4EC',
+    padding: '8px 16px',
     borderRadius: 8,
-    outline: 'none',
-  },
-  eyeBtn: {
-    position: 'absolute',
-    right: 10,
-    background: 'none',
-    borderWidth: 0,
-    borderStyle: 'solid',
-    borderColor: 'transparent',
     cursor: 'pointer',
-    fontSize: 15,
-    padding: 4,
-    color: '#aaa',
-    lineHeight: 1,
+    fontSize: 14,
+    fontFamily: 'inherit',
+    display: 'flex',
+    alignItems: 'center',
+    gap: 6,
+    transition: 'all 0.15s',
   },
-
-  /* error */
-  errorBox: {
-    fontSize: 13,
-    color: '#a32d2d',
-    background: '#FCEBEB',
+  filterBtnActive: {
+    background: GREEN,
     borderWidth: 1,
     borderStyle: 'solid',
-    borderColor: '#f7c1c1',
+    borderColor: GREEN,
+    color: '#fff',
+  },
+  adminBtn: {
+    padding: '8px 16px',
+    background: YELLOW,
+    color: '#222',
+    border: '1px solid #e0bb00',
     borderRadius: 8,
-    padding: '10px 14px',
+    textDecoration: 'none',
+    fontWeight: 500,
+    fontSize: 14,
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: 6,
+    cursor: 'pointer',
   },
 
-  /* submit */
-  submitBtn: {
-    marginTop: 4,
-    padding: '11px',
+  /* section bar */
+  sectionBar: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: '0.75rem',
+  },
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: 500,
+    color: '#1a1a1a',
+  },
+  countBadge: {
+    fontSize: 12,
+    background: '#F0F2F5',
+    color: '#666',
+    border: '1px solid #E0E4EC',
+    padding: '2px 10px',
+    borderRadius: 999,
+  },
+
+  /* table card */
+  tableCard: {
+    background: '#fff',
+    border: '1px solid #E8EBF0',
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+  tableWrapper: {
+    overflowX: 'auto',
+  },
+  table: {
+    width: '100%',
+    borderCollapse: 'collapse',
+    tableLayout: 'fixed',
+  },
+  theadRow: {
     background: GREEN,
     color: '#fff',
-    borderWidth: 0,
-    borderStyle: 'solid',
-    borderColor: 'transparent',
-    borderRadius: 8,
-    fontSize: 15,
+  },
+  th: {
+    padding: '11px 14px',
+    fontSize: 13,
     fontWeight: 500,
-    fontFamily: 'Inter, Arial, sans-serif',
-    cursor: 'pointer',
+    textAlign: 'left',
+  },
+  row: {
+    borderBottom: '1px solid #F0F2F5',
+    transition: 'background 0.1s',
+  },
+
+  /* cell helpers */
+  tdCenter: { textAlign: 'center' },
+  tdRight:  { textAlign: 'right'  },
+
+  /* player cells */
+  pseudoCell: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 8,
+  },
+  avatar: {
+    width: 30,
+    height: 30,
+    borderRadius: '50%',
+    background: '#E1F5EE',
+    color: '#0F6E56',
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    fontSize: 12,
+    fontWeight: 500,
+    flexShrink: 0,
+  },
+  pseudoText: {
+    fontWeight: 500,
+    color: BLUE,
+    fontSize: 14,
+  },
+  fullName: {
+    color: '#666',
+    fontSize: 13,
+    padding: '11px 14px',
+  },
+  pointsVal: {
+    fontWeight: 500,
+    fontSize: 14,
+    padding: '11px 14px',
+    display: 'block',
+  },
+  rawVal: {
+    color: '#888',
+    fontSize: 13,
+    padding: '11px 14px',
+    display: 'block',
+  },
+  tournBadge: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: 4,
+    background: '#F5F7FA',
+    color: '#666',
+    padding: '2px 8px',
+    borderRadius: 999,
+    fontSize: 12,
+  },
+
+  /* states */
+  emptyState: {
+    padding: '3rem 1rem',
+    textAlign: 'center',
+    color: '#888',
+    fontSize: 14,
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    transition: 'background 0.15s',
-  },
-  submitBtnDisabled: {
-    background: GREEN_DARK,
-    cursor: 'not-allowed',
-    opacity: 0.75,
   },
   spinner: {
     display: 'inline-block',
-    width: 15,
-    height: 15,
+    width: 18,
+    height: 18,
     borderRadius: '50%',
-    borderWidth: 2,
-    borderStyle: 'solid',
-    borderColor: 'rgba(255,255,255,0.35)',
-    borderTopColor: '#fff',
+    border: '2px solid #E0E4EC',
+    borderTopColor: GREEN,
     animation: 'spin 0.6s linear infinite',
-  },
-
-  /* footer */
-  footer: {
-    textAlign: 'center',
-    marginTop: '1.5rem',
-  },
-  backLink: {
-    fontSize: 13,
-    color: '#888',
-    textDecoration: 'none',
   },
 };
