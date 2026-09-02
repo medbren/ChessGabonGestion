@@ -1,16 +1,10 @@
-export const metadata = {
-  title: 'ChessGabonGestion',
-  description: 'Application de gestion des classements Chess Gabon',
+import type { Metadata } from 'next';
+import type { ReactNode } from 'react';
+
+export const metadata: Metadata = {
+  title: 'Administration — ChessGabonGestion',
 };
 
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
-  return (
-    <html lang="fr">
-      <body>{children}</body>
-    </html>
-  );
+export default function AdminLayout({ children }: { children: ReactNode }) {
+  return <>{children}</>;
 }

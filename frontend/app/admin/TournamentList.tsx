@@ -1,230 +1,490 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
+
+/* ─── Constants ──────────────────────────────────────────────── */
+
+const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
+const GREEN = '#009E60';
+
+/* ─── Types ──────────────────────────────────────────────────── */
+
+type Platform    = 'LICHESS' | 'CHESSCOM' | 'OTHER';
+type TimeControl = 'BULLET' | 'BLITZ' | 'RAPID' | 'CLASSICAL';
+type NotifType   = 'success' | 'error' | 'idle';
+
+interface Tournament {
+  id:          number;
+  name:        string;
+  platform:    Platform;
+  timeControl: TimeControl;
+  date:        string;
+  results?:    unknown[];
+}
+
+const PLATFORM_LABELS: Record<Platform, string> = {
+  LICHESS:  'Lichess',
+  CHESSCOM: 'Chess.com',
+  OTHER:    'Autre',
+};
+
+const TIME_CONTROL_LABELS: Record<TimeControl, string> = {
+  BULLET:    'Bullet',
+  BLITZ:     'Blitz',
+  RAPID:     'Rapide',
+  CLASSICAL: 'Classique',
+};
+
+/* ─── Component ─────────────────────────────────────────────── */
 
 export default function TournamentList() {
-  // Liste des tournois récupérés depuis le backend.
-  const [tournaments, setTournaments] = useState<any[]>([]);
+  const [tournaments,      setTournaments]      = useState<Tournament[]>([]);
+  const [editingTournament,setEditingTournament]= useState<Tournament | null>(null);
+  const [status,           setStatus]           = useState<NotifType>('idle');
+  const [message,          setMessage]          = useState('');
+  const [loading,          setLoading]          = useState(false);
 
-  // Message d'information affiché après une action.
-  const [message, setMessage] = useState('');
-
-  // Tournoi actuellement sélectionné pour modification.
-  const [editingTournament, setEditingTournament] = useState<any | null>(null);
-
-  // Récupère le token JWT stocké après connexion.
-  function getToken() {
+  function getToken(): string | null {
     return localStorage.getItem('token');
   }
 
-  // Charge tous les tournois depuis l'API.
-  async function loadTournaments() {
-    const token = getToken();
-
-    const res = await fetch('http://localhost:3001/tournaments', {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    });
-
-    const data = await res.json();
-
-    setTournaments(Array.isArray(data) ? data : []);
+  function authHeaders(extra: Record<string, string> = {}): Record<string, string> {
+    return { Authorization: `Bearer ${getToken()}`, ...extra };
   }
 
-  // Modifie le tournoi actuellement sélectionné.
-  async function updateTournament(event: any) {
-    event.preventDefault();
+  function notify(msg: string, type: NotifType) {
+    setMessage(msg);
+    setStatus(type);
+    if (type === 'success') setTimeout(() => setStatus('idle'), 4000);
+  }
 
+  const loadTournaments = useCallback(async () => {
+    try {
+      const res = await fetch(`${BASE_URL}/tournaments`, { headers: authHeaders() });
+      if (!res.ok) return;
+      const data: unknown = await res.json();
+      setTournaments(Array.isArray(data) ? (data as Tournament[]) : []);
+    } catch { /* network error */ }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => { void loadTournaments(); }, [loadTournaments]);
+
+  async function updateTournament(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
     if (!editingTournament) return;
+    setLoading(true);
 
-    const token = getToken();
-    const form = event.target;
-
-    const data = {
-      name: form.name.value,
-      platform: form.platform.value,
-      timeControl: form.timeControl.value,
-      date: form.date.value,
+    const fd = new FormData(e.currentTarget);
+    const payload = {
+      name:        fd.get('name')        as string,
+      platform:    fd.get('platform')    as Platform,
+      timeControl: fd.get('timeControl') as TimeControl,
+      date:        fd.get('date')        as string,
     };
 
-    const res = await fetch(
-      `http://localhost:3001/tournaments/${editingTournament.id}`,
-      {
+    try {
+      const res = await fetch(`${BASE_URL}/tournaments/${editingTournament.id}`, {
         method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
+        headers: authHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify(payload),
+      });
 
-          // Authentification JWT.
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(data),
+      if (res.ok) {
+        notify('Tournoi modifié avec succès.', 'success');
+        setEditingTournament(null);
+        void loadTournaments();
+      } else {
+        notify(`Erreur ${res.status} lors de la modification.`, 'error');
       }
-    );
-
-    if (res.ok) {
-      setMessage('Tournoi modifié avec succès');
-
-      // Fermeture du formulaire de modification.
-      setEditingTournament(null);
-
-      // Rechargement de la liste.
-      loadTournaments();
-    } else {
-      setMessage('Erreur lors de la modification du tournoi');
+    } catch {
+      notify('Impossible de contacter le serveur.', 'error');
+    } finally {
+      setLoading(false);
     }
   }
 
-  // Supprime un tournoi après confirmation utilisateur.
   async function deleteTournament(id: number) {
-    const confirmed = confirm(
-      'Voulez-vous vraiment supprimer ce tournoi ?'
-    );
+    if (!confirm('Voulez-vous vraiment supprimer ce tournoi et tous ses résultats ?')) return;
 
-    if (!confirmed) return;
+    try {
+      const res = await fetch(`${BASE_URL}/tournaments/${id}`, {
+        method: 'DELETE',
+        headers: authHeaders(),
+      });
 
-    const token = getToken();
-
-    const res = await fetch(`http://localhost:3001/tournaments/${id}`, {
-      method: 'DELETE',
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    });
-
-    if (res.ok) {
-      setMessage('Tournoi supprimé avec succès');
-
-      // Actualisation de la liste après suppression.
-      loadTournaments();
-    } else {
-      setMessage('Erreur lors de la suppression du tournoi');
+      if (res.ok) {
+        notify('Tournoi supprimé.', 'success');
+        if (editingTournament?.id === id) setEditingTournament(null);
+        void loadTournaments();
+      } else {
+        notify(`Erreur ${res.status} lors de la suppression.`, 'error');
+      }
+    } catch {
+      notify('Impossible de contacter le serveur.', 'error');
     }
   }
-
-  // Chargement automatique des tournois au démarrage du composant.
-  useEffect(() => {
-    loadTournaments();
-  }, []);
 
   return (
-    <section>
-      <h2>Liste des tournois</h2>
+    <div>
 
-      <p>{message}</p>
+      {/* ── Notification ── */}
+      {status === 'success' && (
+        <div style={{ ...styles.notif, ...styles.notifSuccess }} role="status">
+          ✓ {message}
+        </div>
+      )}
+      {status === 'error' && (
+        <div style={{ ...styles.notif, ...styles.notifError }} role="alert">
+          ⚠ {message}
+        </div>
+      )}
 
-      {/* Formulaire de modification affiché uniquement
-          lorsqu'un tournoi est sélectionné */}
+      {/* ── Edit form (conditional) ── */}
       {editingTournament && (
-        <>
-          <h3>Modifier un tournoi</h3>
+        <div style={styles.editCard}>
+          <p style={styles.editTitle}>Modifier — {editingTournament.name}</p>
+          <form onSubmit={updateTournament} style={styles.form}>
 
-          <form onSubmit={updateTournament}>
-            <p>
+            <div style={styles.field}>
+              <label htmlFor="tl-name" style={styles.label}>Nom du tournoi</label>
               <input
+                id="tl-name"
                 name="name"
                 defaultValue={editingTournament.name}
                 required
+                disabled={loading}
+                style={styles.input}
               />
-            </p>
+            </div>
 
-            <p>
-              <select
-                name="platform"
-                defaultValue={editingTournament.platform}
-              >
-                <option value="LICHESS">Lichess</option>
-                <option value="CHESSCOM">Chess.com</option>
-                <option value="OTHER">Autre</option>
-              </select>
-            </p>
+            <div style={styles.row2}>
+              <div style={styles.field}>
+                <label htmlFor="tl-platform" style={styles.label}>Plateforme</label>
+                <select
+                  id="tl-platform"
+                  name="platform"
+                  defaultValue={editingTournament.platform}
+                  disabled={loading}
+                  style={styles.select}
+                >
+                  <option value="LICHESS">Lichess</option>
+                  <option value="CHESSCOM">Chess.com</option>
+                  <option value="OTHER">Autre</option>
+                </select>
+              </div>
+              <div style={styles.field}>
+                <label htmlFor="tl-timeControl" style={styles.label}>Cadence</label>
+                <select
+                  id="tl-timeControl"
+                  name="timeControl"
+                  defaultValue={editingTournament.timeControl}
+                  disabled={loading}
+                  style={styles.select}
+                >
+                  <option value="BULLET">Bullet</option>
+                  <option value="BLITZ">Blitz</option>
+                  <option value="RAPID">Rapide</option>
+                  <option value="CLASSICAL">Classique</option>
+                </select>
+              </div>
+            </div>
 
-            <p>
-              <select
-                name="timeControl"
-                defaultValue={editingTournament.timeControl}
-              >
-                <option value="BULLET">Bullet</option>
-                <option value="BLITZ">Blitz</option>
-                <option value="RAPID">Rapide</option>
-                <option value="CLASSICAL">Classique</option>
-              </select>
-            </p>
-
-            <p>
+            <div style={styles.field}>
+              <label htmlFor="tl-date" style={styles.label}>Date</label>
               <input
-                type="date"
+                id="tl-date"
                 name="date"
+                type="date"
                 defaultValue={editingTournament.date.slice(0, 10)}
                 required
+                disabled={loading}
+                style={styles.input}
               />
-            </p>
+            </div>
 
-            <button type="submit">
-              Enregistrer
-            </button>{' '}
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button
+                type="submit"
+                disabled={loading}
+                style={{ ...styles.primaryBtn, ...(loading ? styles.btnDisabled : {}) }}
+              >
+                {loading ? 'Enregistrement…' : 'Enregistrer'}
+              </button>
+              <button
+                type="button"
+                style={styles.ghostBtn}
+                onClick={() => setEditingTournament(null)}
+              >
+                Annuler
+              </button>
+            </div>
 
-            <button
-              type="button"
-              onClick={() => setEditingTournament(null)}
-            >
-              Annuler
-            </button>
           </form>
-
-          <hr />
-        </>
+        </div>
       )}
 
-      {/* Tableau des tournois enregistrés */}
-      <table border={1} cellPadding={8}>
-        <thead>
-          <tr>
-            <th>ID</th>
-            <th>Nom</th>
-            <th>Plateforme</th>
-            <th>Cadence</th>
-            <th>Date</th>
-            <th>Résultats</th>
-            <th>Actions</th>
-          </tr>
-        </thead>
-
-        <tbody>
-          {tournaments.map((tournament) => (
-            <tr key={tournament.id}>
-              <td>{tournament.id}</td>
-              <td>{tournament.name}</td>
-              <td>{tournament.platform}</td>
-              <td>{tournament.timeControl}</td>
-
-              {/* Conversion de la date PostgreSQL en date lisible */}
-              <td>
-                {new Date(tournament.date).toLocaleDateString()}
-              </td>
-
-              {/* Nombre de résultats enregistrés dans ce tournoi */}
-              <td>
-                {tournament.results?.length ?? 0}
-              </td>
-
-              <td>
-                <button
-                  onClick={() => setEditingTournament(tournament)}
+      {/* ── Table ── */}
+      {tournaments.length === 0 ? (
+        <div style={styles.emptyState}>
+          <span style={{ fontSize: 28, display: 'block', marginBottom: 8 }}>♟</span>
+          Aucun tournoi enregistré.
+        </div>
+      ) : (
+        <div style={styles.tableWrapper}>
+          <table style={styles.table}>
+            <thead>
+              <tr style={styles.theadRow}>
+                <th style={{ ...styles.th, width: 48 }}>ID</th>
+                <th style={styles.th}>Nom</th>
+                <th style={styles.th}>Plateforme</th>
+                <th style={styles.th}>Cadence</th>
+                <th style={styles.th}>Date</th>
+                <th style={{ ...styles.th, textAlign: 'center' }}>Résultats</th>
+                <th style={styles.th}>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {tournaments.map((t) => (
+                <tr
+                  key={t.id}
+                  style={{
+                    ...styles.row,
+                    ...(editingTournament?.id === t.id ? styles.rowSelected : {}),
+                  }}
                 >
-                  Modifier
-                </button>{' '}
-
-                <button
-                  onClick={() => deleteTournament(tournament.id)}
-                >
-                  Supprimer
-                </button>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </section>
+                  <td style={{ ...styles.td, color: '#aaa', fontSize: 12 }}>{t.id}</td>
+                  <td style={{ ...styles.td, fontWeight: 500 }}>{t.name}</td>
+                  <td style={styles.td}>
+                    <span style={styles.platformBadge}>{PLATFORM_LABELS[t.platform] ?? t.platform}</span>
+                  </td>
+                  <td style={{ ...styles.td, fontSize: 13, color: '#555' }}>
+                    {TIME_CONTROL_LABELS[t.timeControl] ?? t.timeControl}
+                  </td>
+                  <td style={{ ...styles.td, fontSize: 13, color: '#555' }}>
+                    {new Date(t.date).toLocaleDateString('fr-GA')}
+                  </td>
+                  <td style={{ ...styles.td, textAlign: 'center' }}>
+                    <span style={styles.countBadge}>{t.results?.length ?? 0}</span>
+                  </td>
+                  <td style={styles.td}>
+                    <div style={{ display: 'flex', gap: 6 }}>
+                      <button
+                        style={styles.actionBtn}
+                        onClick={() => { setEditingTournament(t); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+                      >
+                        Modifier
+                      </button>
+                      <button
+                        style={{ ...styles.actionBtn, ...styles.actionBtnDanger }}
+                        onClick={() => void deleteTournament(t.id)}
+                      >
+                        Supprimer
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
   );
 }
+
+/* ─── Styles ─────────────────────────────────────────────────── */
+
+const styles: Record<string, React.CSSProperties> = {
+
+  /* notification */
+  notif: {
+    fontSize: 13,
+    padding: '10px 14px',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderStyle: 'solid',
+    marginBottom: 14,
+  },
+  notifSuccess: {
+    background: '#E1F5EE',
+    borderColor: '#9FE1CB',
+    color: '#0F6E56',
+  },
+  notifError: {
+    background: '#FCEBEB',
+    borderColor: '#f7c1c1',
+    color: '#a32d2d',
+  },
+
+  /* edit card */
+  editCard: {
+    background: '#F7F9FC',
+    borderWidth: 1,
+    borderStyle: 'solid',
+    borderColor: '#E0E4EC',
+    borderRadius: 10,
+    padding: '1rem 1.25rem',
+    marginBottom: 16,
+  },
+  editTitle: {
+    fontSize: 14,
+    fontWeight: 500,
+    color: '#1a1a1a',
+    marginBottom: 14,
+  },
+
+  /* form */
+  form: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 12,
+  },
+  row2: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))',
+    gap: 12,
+  },
+  field: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 5,
+  },
+  label: {
+    fontSize: 12,
+    fontWeight: 500,
+    color: '#555',
+  },
+  input: {
+    padding: '9px 12px',
+    fontSize: 14,
+    fontFamily: 'Inter, Arial, sans-serif',
+    color: '#1a1a1a',
+    background: '#fff',
+    borderWidth: 1,
+    borderStyle: 'solid',
+    borderColor: '#E0E4EC',
+    borderRadius: 8,
+    outline: 'none',
+    width: '100%',
+  },
+  select: {
+    padding: '9px 12px',
+    fontSize: 14,
+    fontFamily: 'Inter, Arial, sans-serif',
+    color: '#1a1a1a',
+    background: '#fff',
+    borderWidth: 1,
+    borderStyle: 'solid',
+    borderColor: '#E0E4EC',
+    borderRadius: 8,
+    outline: 'none',
+    width: '100%',
+    cursor: 'pointer',
+  },
+
+  /* buttons */
+  primaryBtn: {
+    padding: '9px 18px',
+    background: GREEN,
+    color: '#fff',
+    borderWidth: 0,
+    borderStyle: 'solid',
+    borderColor: 'transparent',
+    borderRadius: 8,
+    fontSize: 14,
+    fontWeight: 500,
+    fontFamily: 'Inter, Arial, sans-serif',
+    cursor: 'pointer',
+  },
+  ghostBtn: {
+    padding: '9px 18px',
+    background: '#fff',
+    color: '#555',
+    borderWidth: 1,
+    borderStyle: 'solid',
+    borderColor: '#E0E4EC',
+    borderRadius: 8,
+    fontSize: 14,
+    fontFamily: 'Inter, Arial, sans-serif',
+    cursor: 'pointer',
+  },
+  btnDisabled: {
+    opacity: 0.7,
+    cursor: 'not-allowed',
+  },
+  actionBtn: {
+    padding: '5px 10px',
+    fontSize: 12,
+    background: '#F5F7FA',
+    color: '#444',
+    borderWidth: 1,
+    borderStyle: 'solid',
+    borderColor: '#E0E4EC',
+    borderRadius: 6,
+    cursor: 'pointer',
+    fontFamily: 'Inter, Arial, sans-serif',
+    whiteSpace: 'nowrap' as const,
+  },
+  actionBtnDanger: {
+    background: '#FCEBEB',
+    color: '#a32d2d',
+    borderColor: '#f7c1c1',
+  },
+
+  /* table */
+  tableWrapper: { overflowX: 'auto' },
+  table: {
+    width: '100%',
+    borderCollapse: 'collapse',
+  },
+  theadRow: {
+    background: GREEN,
+    color: '#fff',
+  },
+  th: {
+    padding: '10px 14px',
+    fontSize: 12,
+    fontWeight: 500,
+    textAlign: 'left' as const,
+    whiteSpace: 'nowrap' as const,
+  },
+  row: {
+    borderBottomWidth: 1,
+    borderBottomStyle: 'solid' as const,
+    borderBottomColor: '#F0F2F5',
+  },
+  rowSelected: {
+    background: '#F0FBF6',
+  },
+  td: {
+    padding: '10px 14px',
+    fontSize: 14,
+    verticalAlign: 'middle' as const,
+  },
+
+  /* badges */
+  platformBadge: {
+    display: 'inline-block',
+    fontSize: 12,
+    background: '#EEF3FB',
+    color: '#3A75C4',
+    padding: '2px 8px',
+    borderRadius: 999,
+  },
+  countBadge: {
+    display: 'inline-block',
+    fontSize: 12,
+    background: '#F0F2F5',
+    color: '#666',
+    padding: '2px 8px',
+    borderRadius: 999,
+  },
+
+  /* empty */
+  emptyState: {
+    padding: '2.5rem 1rem',
+    textAlign: 'center',
+    color: '#aaa',
+    fontSize: 14,
+  },
+};

@@ -2,103 +2,242 @@
 
 import { useState } from 'react';
 
+/* ─── Constants ──────────────────────────────────────────────── */
+
+const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
+const GREEN = '#009E60';
+
+/* ─── Types ──────────────────────────────────────────────────── */
+
+type Platform    = 'LICHESS' | 'CHESSCOM' | 'OTHER';
+type TimeControl = 'BULLET' | 'BLITZ' | 'RAPID' | 'CLASSICAL';
+type NotifType   = 'success' | 'error' | 'idle';
+
+interface TournamentPayload {
+  name:        string;
+  platform:    Platform;
+  timeControl: TimeControl;
+  date:        string;
+}
+
+/* ─── Component ─────────────────────────────────────────────── */
+
 export default function TournamentForm() {
-  // Message affiché après la création du tournoi
-  // ou en cas d'erreur.
+  const [status,  setStatus]  = useState<NotifType>('idle');
   const [message, setMessage] = useState('');
+  const [loading, setLoading] = useState(false);
 
-  // Fonction appelée lors de la soumission du formulaire.
-  async function createTournament(event: any) {
-    event.preventDefault();
+  function notify(msg: string, type: NotifType) {
+    setMessage(msg);
+    setStatus(type);
+    if (type === 'success') setTimeout(() => setStatus('idle'), 5000);
+  }
 
-    // Récupération du token JWT stocké après connexion.
-    const token = localStorage.getItem('token');
+  async function createTournament(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setLoading(true);
+    setStatus('idle');
 
-    // Récupération du formulaire HTML.
-    const form = event.target;
+    const form = e.currentTarget;
+    const fd   = new FormData(form);
 
-    // Construction de l'objet tournoi à envoyer au backend.
-    const data = {
-      name: form.name.value,
-      platform: form.platform.value,
-      timeControl: form.timeControl.value,
-      date: form.date.value,
+    const payload: TournamentPayload = {
+      name:        fd.get('name')        as string,
+      platform:    fd.get('platform')    as Platform,
+      timeControl: fd.get('timeControl') as TimeControl,
+      date:        fd.get('date')        as string,
     };
 
-    // Appel de l'API NestJS pour créer le tournoi.
-    const res = await fetch('http://localhost:3001/tournaments', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
+    try {
+      const res = await fetch(`${BASE_URL}/tournaments`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization:  `Bearer ${localStorage.getItem('token')}`,
+        },
+        body: JSON.stringify(payload),
+      });
 
-        // Authentification JWT obligatoire.
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify(data),
-    });
-
-    // Si la création a réussi.
-    if (res.ok) {
-      setMessage('Tournoi créé avec succès');
-
-      // Réinitialisation du formulaire.
-      form.reset();
-    } else {
-      // Affichage de l'erreur renvoyée par le backend.
-      const error = await res.text();
-      setMessage(`Erreur : ${error}`);
+      if (res.ok) {
+        notify('Tournoi créé avec succès.', 'success');
+        form.reset();
+      } else {
+        const text = await res.text();
+        notify(`Erreur ${res.status} : ${text || 'réponse inattendue du serveur.'}`, 'error');
+      }
+    } catch {
+      notify('Impossible de contacter le serveur. Vérifiez votre connexion.', 'error');
+    } finally {
+      setLoading(false);
     }
   }
 
   return (
-    <section>
-      <h2>Créer un tournoi</h2>
+    <form onSubmit={createTournament} style={styles.form}>
 
-      {/* Formulaire de création d'un tournoi */}
-      <form onSubmit={createTournament}>
-        <p>
-          <input
-            name="name"
-            placeholder="Nom du tournoi"
-            required
-          />
-        </p>
+      {/* Name */}
+      <div style={styles.field}>
+        <label htmlFor="tf-name" style={styles.label}>Nom du tournoi</label>
+        <input
+          id="tf-name"
+          name="name"
+          placeholder="Blitz du dimanche #12"
+          required
+          disabled={loading}
+          style={styles.input}
+        />
+      </div>
 
-        {/* Plateforme d'origine du tournoi */}
-        <p>
-          <select name="platform">
+      {/* Platform + TimeControl */}
+      <div style={styles.row2}>
+        <div style={styles.field}>
+          <label htmlFor="tf-platform" style={styles.label}>Plateforme</label>
+          <select id="tf-platform" name="platform" disabled={loading} style={styles.select}>
             <option value="LICHESS">Lichess</option>
             <option value="CHESSCOM">Chess.com</option>
             <option value="OTHER">Autre</option>
           </select>
-        </p>
-
-        {/* Cadence du tournoi */}
-        <p>
-          <select name="timeControl">
+        </div>
+        <div style={styles.field}>
+          <label htmlFor="tf-timeControl" style={styles.label}>Cadence</label>
+          <select id="tf-timeControl" name="timeControl" disabled={loading} style={styles.select}>
             <option value="BULLET">Bullet</option>
             <option value="BLITZ">Blitz</option>
             <option value="RAPID">Rapide</option>
             <option value="CLASSICAL">Classique</option>
           </select>
-        </p>
+        </div>
+      </div>
 
-        {/* Date du tournoi */}
-        <p>
-          <input
-            type="date"
-            name="date"
-            required
-          />
-        </p>
+      {/* Date */}
+      <div style={styles.field}>
+        <label htmlFor="tf-date" style={styles.label}>Date du tournoi</label>
+        <input
+          id="tf-date"
+          name="date"
+          type="date"
+          required
+          disabled={loading}
+          style={styles.input}
+        />
+      </div>
 
-        <button type="submit">
-          Créer le tournoi
+      {/* Notification */}
+      {status === 'success' && (
+        <div style={{ ...styles.notif, ...styles.notifSuccess }} role="status">
+          ✓ {message}
+        </div>
+      )}
+      {status === 'error' && (
+        <div style={{ ...styles.notif, ...styles.notifError }} role="alert">
+          ⚠ {message}
+        </div>
+      )}
+
+      {/* Submit */}
+      <div>
+        <button
+          type="submit"
+          disabled={loading}
+          style={{ ...styles.submitBtn, ...(loading ? styles.submitBtnDisabled : {}) }}
+        >
+          {loading ? 'Création…' : '+ Créer le tournoi'}
         </button>
-      </form>
+      </div>
 
-      {/* Message d'information affiché après l'action */}
-      <p>{message}</p>
-    </section>
+    </form>
   );
 }
+
+/* ─── Styles ─────────────────────────────────────────────────── */
+
+const styles: Record<string, React.CSSProperties> = {
+  form: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 14,
+  },
+
+  row2: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))',
+    gap: 12,
+  },
+
+  field: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 5,
+  },
+
+  label: {
+    fontSize: 12,
+    fontWeight: 500,
+    color: '#555',
+  },
+
+  input: {
+    padding: '9px 12px',
+    fontSize: 14,
+    fontFamily: 'Inter, Arial, sans-serif',
+    color: '#1a1a1a',
+    background: '#F7F9FC',
+    borderWidth: 1,
+    borderStyle: 'solid',
+    borderColor: '#E0E4EC',
+    borderRadius: 8,
+    outline: 'none',
+    width: '100%',
+  },
+
+  select: {
+    padding: '9px 12px',
+    fontSize: 14,
+    fontFamily: 'Inter, Arial, sans-serif',
+    color: '#1a1a1a',
+    background: '#F7F9FC',
+    borderWidth: 1,
+    borderStyle: 'solid',
+    borderColor: '#E0E4EC',
+    borderRadius: 8,
+    outline: 'none',
+    width: '100%',
+    cursor: 'pointer',
+  },
+
+  notif: {
+    fontSize: 13,
+    padding: '10px 14px',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderStyle: 'solid',
+  },
+  notifSuccess: {
+    background: '#E1F5EE',
+    borderColor: '#9FE1CB',
+    color: '#0F6E56',
+  },
+  notifError: {
+    background: '#FCEBEB',
+    borderColor: '#f7c1c1',
+    color: '#a32d2d',
+  },
+
+  submitBtn: {
+    padding: '10px 18px',
+    background: GREEN,
+    color: '#fff',
+    borderWidth: 0,
+    borderStyle: 'solid',
+    borderColor: 'transparent',
+    borderRadius: 8,
+    fontSize: 14,
+    fontWeight: 500,
+    fontFamily: 'Inter, Arial, sans-serif',
+    cursor: 'pointer',
+  },
+  submitBtnDisabled: {
+    opacity: 0.7,
+    cursor: 'not-allowed',
+  },
+};
