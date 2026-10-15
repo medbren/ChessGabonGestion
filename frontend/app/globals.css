@@ -1,0 +1,81 @@
+@import "tailwindcss";
+
+@theme {
+  --color-brand: #009e60;
+  --color-brand-dark: #007a4a;
+  --color-brand-light: #e1f5ee;
+  --color-accent: #fcd116;
+  --color-accent-dark: #e0bb00;
+  --color-blue: #3a75c4;
+  --color-surface: #f7f9fc;
+  --color-border: #e8ebf0;
+  --color-muted: #6b7280;
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, sans-serif;
+}
+
+@layer base {
+  html { @apply antialiased; }
+  body { @apply bg-surface text-gray-900 font-sans min-h-screen; }
+  * { @apply border-border; }
+}
+
+@layer utilities {
+  .animate-spin-slow { animation: spin 0.7s linear infinite; }
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
+
+@keyframes toast-progress {
+  from { width: 100%; }
+  to { width: 0%; }
+}
+
+/* Interactive table rows */
+.table-row-interactive {
+  transition: background-color 0.15s ease, box-shadow 0.15s ease;
+}
+.table-row-interactive:hover {
+  background-color: color-mix(in srgb, var(--color-brand) 6%, white);
+}
+.table-row-interactive:focus-within {
+  background-color: color-mix(in srgb, var(--color-brand) 8%, white);
+  box-shadow: inset 3px 0 0 var(--color-brand);
+}
+
+/* Filter / pill buttons */
+.pill {
+  transition: background-color 0.15s ease, border-color 0.15s ease,
+    color 0.15s ease, box-shadow 0.15s ease, transform 0.1s ease;
+}
+.pill:hover:not([aria-pressed='true']) {
+  border-color: color-mix(in srgb, var(--color-brand) 45%, transparent);
+  color: var(--color-brand);
+  background-color: var(--color-brand-light);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.04);
+}
+.pill:active:not([aria-pressed='true']) {
+  transform: scale(0.97);
+}
+.pill:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-brand) 30%, transparent);
+}
+
+/* Hide scrollbar but keep scroll (tabs mobile) */
+.scrollbar-none {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}

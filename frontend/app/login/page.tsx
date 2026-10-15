@@ -1,4 +1,16 @@
-<<<<<<< HEAD
+'use client';
+
+import { useRef, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import Link from 'next/link';
+import { Eye, EyeOff, Mail, Lock } from 'lucide-react';
+import { Footer } from '@/components/Footer';
+import { Logo } from '@/components/Logo';
+import { Button } from '@/components/ui/Button';
+import { BASE_URL } from '@/lib/api';
+import { toast } from '@/lib/toast';
+
+type Status = 'idle' | 'loading' | 'error';
 'use client';
 
 import { useState, useRef } from 'react';
@@ -15,52 +27,42 @@ interface LoginResponse {
   user: unknown;
 }
 
-type Status = 'idle' | 'loading' | 'error';
-
-/* ─── Component ─────────────────────────────────────────────── */
-
 export default function LoginPage() {
-  const router  = useRouter();
-  const emailRef    = useRef<HTMLInputElement>(null);
+  const router = useRouter();
+  const emailRef = useRef<HTMLInputElement>(null);
   const passwordRef = useRef<HTMLInputElement>(null);
-
-  const [status,  setStatus]  = useState<Status>('idle');
-  const [message, setMessage] = useState('');
+  const [status, setStatus] = useState<Status>('idle');
   const [showPwd, setShowPwd] = useState(false);
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setStatus('loading');
-    setMessage('');
-
     try {
       const res = await fetch(`${BASE_URL}/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          email:    emailRef.current?.value,
+          email: emailRef.current?.value,
           password: passwordRef.current?.value,
         }),
       });
-
       if (res.status === 401) {
-        setMessage('Email ou mot de passe incorrect.');
+        toast.error('Email ou mot de passe incorrect.');
         setStatus('error');
         return;
       }
-
       if (!res.ok) {
-        setMessage(`Erreur serveur (${res.status}). Réessayez plus tard.`);
+        toast.error(`Erreur serveur (${res.status}). Réessayez plus tard.`);
         setStatus('error');
         return;
       }
-
       const data = (await res.json()) as LoginResponse;
       localStorage.setItem('token', data.accessToken);
       localStorage.setItem('user', JSON.stringify(data.user));
+      toast.success('Connexion réussie');
       router.push('/admin');
     } catch {
-      setMessage('Impossible de contacter le serveur. Vérifiez votre connexion.');
+      toast.error('Impossible de contacter le serveur. Vérifiez votre connexion.');
       setStatus('error');
     }
   }
@@ -68,621 +70,83 @@ export default function LoginPage() {
   const isLoading = status === 'loading';
 
   return (
-    <main style={styles.page}>
-      {/* ── Card ── */}
-      <div style={styles.card}>
-
-        {/* Logo */}
-        <div style={styles.logoWrap}>
-          <div style={styles.logoIcon}>♟</div>
-          <span style={styles.logoText}>
-            <span style={{ color: GREEN }}>Chess</span>Gabon
-            <span style={styles.logoMuted}>Gestion</span>
-          </span>
+    <div className="flex min-h-dvh flex-col bg-surface">
+      <main
+        className="flex flex-1 items-center justify-center px-4 py-8 sm:py-10"
+        style={{
+          paddingTop: 'max(2rem, env(safe-area-inset-top))',
+          paddingBottom: 'max(2rem, env(safe-area-inset-bottom))',
+          paddingLeft: 'max(1rem, env(safe-area-inset-left))',
+          paddingRight: 'max(1rem, env(safe-area-inset-right))',
+        }}
+      >
+        <div className="w-full max-w-md rounded-2xl border border-border bg-white p-6 shadow-sm sm:p-8">
+          <div className="mb-6 flex justify-center">
+            <Logo href="/" />
+          </div>
+          <h1 className="text-center text-xl font-semibold text-gray-900">
+            Connexion administrateur
+          </h1>
+          <p className="mt-1 mb-6 text-center text-sm text-muted">
+            Accès réservé aux membres du bureau
+          </p>
+          <form onSubmit={handleSubmit} noValidate className="space-y-4">
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="email" className="text-xs font-medium text-gray-600">
+                Adresse e-mail
+              </label>
+              <div className="relative">
+                <Mail className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                <input
+                  id="email"
+                  ref={emailRef}
+                  type="email"
+                  autoComplete="email"
+                  placeholder="admin@chessgabon.ga"
+                  required
+                  disabled={isLoading}
+                  className="w-full rounded-lg border border-border bg-surface py-2.5 pl-10 pr-3 text-sm outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/20 disabled:opacity-60"
+                />
+              </div>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="password" className="text-xs font-medium text-gray-600">
+                Mot de passe
+              </label>
+              <div className="relative">
+                <Lock className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                <input
+                  id="password"
+                  ref={passwordRef}
+                  type={showPwd ? 'text' : 'password'}
+                  autoComplete="current-password"
+                  placeholder="••••••••"
+                  required
+                  disabled={isLoading}
+                  className="w-full rounded-lg border border-border bg-surface py-2.5 pl-10 pr-11 text-sm outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/20 disabled:opacity-60"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPwd((v) => !v)}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded p-1 text-gray-400 hover:text-gray-600"
+                  aria-label={showPwd ? 'Masquer le mot de passe' : 'Afficher le mot de passe'}
+                >
+                  {showPwd ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
+            </div>
+            <Button type="submit" loading={isLoading} className="w-full" size="lg">
+              {isLoading ? 'Connexion…' : 'Se connecter'}
+            </Button>
+          </form>
+          <p className="mt-6 text-center">
+            <Link href="/" className="text-sm text-muted transition hover:text-brand">
+              ← Retour au classement
+            </Link>
+          </p>
         </div>
-
-        <h1 style={styles.heading}>Connexion administrateur</h1>
-        <p style={styles.hint}>Accès réservé aux membres du bureau.</p>
-
-        {/* Form */}
-        <form onSubmit={handleSubmit} noValidate style={styles.form}>
-
-          {/* Email */}
-          <div style={styles.field}>
-            <label htmlFor="email" style={styles.label}>Adresse e-mail</label>
-            <div style={styles.inputWrap}>
-              <span style={styles.inputIcon} aria-hidden="true">✉</span>
-              <input
-                id="email"
-                ref={emailRef}
-                type="email"
-                autoComplete="email"
-                placeholder="admin@chessgabon.ga"
-                required
-                disabled={isLoading}
-                style={styles.input}
-              />
-            </div>
-          </div>
-
-          {/* Password */}
-          <div style={styles.field}>
-            <label htmlFor="password" style={styles.label}>Mot de passe</label>
-            <div style={styles.inputWrap}>
-              <span style={styles.inputIcon} aria-hidden="true">🔒</span>
-              <input
-                id="password"
-                ref={passwordRef}
-                type={showPwd ? 'text' : 'password'}
-                autoComplete="current-password"
-                placeholder="••••••••"
-                required
-                disabled={isLoading}
-                style={{ ...styles.input, paddingRight: 44 }}
-              />
-              <button
-                type="button"
-                onClick={() => setShowPwd((v) => !v)}
-                style={styles.eyeBtn}
-                aria-label={showPwd ? 'Masquer le mot de passe' : 'Afficher le mot de passe'}
-              >
-                {showPwd ? '🙈' : '👁'}
-              </button>
-            </div>
-          </div>
-
-          {/* Error message */}
-          {status === 'error' && (
-            <div role="alert" style={styles.errorBox}>
-              ⚠ {message}
-            </div>
-          )}
-
-          {/* Submit */}
-          <button
-            type="submit"
-            disabled={isLoading}
-            style={{ ...styles.submitBtn, ...(isLoading ? styles.submitBtnDisabled : {}) }}
-          >
-            {isLoading
-              ? <><span style={styles.spinner} aria-hidden="true" /> Connexion…</>
-              : 'Se connecter'}
-          </button>
-        </form>
-
-        {/* Footer */}
-        <p style={styles.footer}>
-          <a href="/" style={styles.backLink}>← Retour au classement</a>
-        </p>
-      </div>
-    </main>
+      </main>
+      <Footer />
+    </div>
   );
 }
-
-/* ─── Styles ─────────────────────────────────────────────────── */
-
-const styles: Record<string, React.CSSProperties> = {
-  page: {
-    minHeight: '100vh',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    background: '#F7F9FC',
-    padding: '24px 16px',
-  },
-
-  card: {
-    width: '100%',
-    maxWidth: 420,
-    background: '#fff',
-    borderRadius: 16,
-    borderWidth: 1,
-    borderStyle: 'solid',
-    borderColor: '#E8EBF0',
-    padding: '2.5rem 2rem',
-  },
-
-  /* logo */
-  logoWrap: {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 10,
-    marginBottom: '1.5rem',
-  },
-  logoIcon: {
-    width: 38,
-    height: 38,
-    background: GREEN,
-    borderRadius: 9,
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    color: '#fff',
-    fontSize: 20,
-  },
-  logoText: {
-    fontSize: 20,
-    fontWeight: 500,
-    letterSpacing: '-0.3px',
-    color: '#1a1a1a',
-  },
-  logoMuted: {
-    color: '#888',
-    fontWeight: 400,
-  },
-
-  /* headings */
-  heading: {
-    fontSize: 20,
-    fontWeight: 500,
-    color: '#1a1a1a',
-    textAlign: 'center',
-    margin: '0 0 6px',
-  },
-  hint: {
-    fontSize: 13,
-    color: '#888',
-    textAlign: 'center',
-    margin: '0 0 1.75rem',
-  },
-
-  /* form */
-  form: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: 16,
-  },
-  field: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: 6,
-  },
-  label: {
-    fontSize: 13,
-    fontWeight: 500,
-    color: '#444',
-  },
-  inputWrap: {
-    position: 'relative',
-    display: 'flex',
-    alignItems: 'center',
-  },
-  inputIcon: {
-    position: 'absolute',
-    left: 12,
-    fontSize: 14,
-    pointerEvents: 'none',
-    color: '#aaa',
-  },
-  input: {
-    width: '100%',
-    padding: '10px 12px 10px 36px',
-    fontSize: 14,
-    fontFamily: 'Inter, Arial, sans-serif',
-    color: '#1a1a1a',
-    background: '#F7F9FC',
-    borderWidth: 1,
-    borderStyle: 'solid',
-    borderColor: '#E0E4EC',
-    borderRadius: 8,
-    outline: 'none',
-  },
-  eyeBtn: {
-    position: 'absolute',
-    right: 10,
-    background: 'none',
-    borderWidth: 0,
-    borderStyle: 'solid',
-    borderColor: 'transparent',
-    cursor: 'pointer',
-    fontSize: 15,
-    padding: 4,
-    color: '#aaa',
-    lineHeight: 1,
-  },
-
-  /* error */
-  errorBox: {
-    fontSize: 13,
-    color: '#a32d2d',
-    background: '#FCEBEB',
-    borderWidth: 1,
-    borderStyle: 'solid',
-    borderColor: '#f7c1c1',
-    borderRadius: 8,
-    padding: '10px 14px',
-  },
-
-  /* submit */
-  submitBtn: {
-    marginTop: 4,
-    padding: '11px',
-    background: GREEN,
-    color: '#fff',
-    borderWidth: 0,
-    borderStyle: 'solid',
-    borderColor: 'transparent',
-    borderRadius: 8,
-    fontSize: 15,
-    fontWeight: 500,
-    fontFamily: 'Inter, Arial, sans-serif',
-    cursor: 'pointer',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    transition: 'background 0.15s',
-  },
-  submitBtnDisabled: {
-    background: GREEN_DARK,
-    cursor: 'not-allowed',
-    opacity: 0.75,
-  },
-  spinner: {
-    display: 'inline-block',
-    width: 15,
-    height: 15,
-    borderRadius: '50%',
-    borderWidth: 2,
-    borderStyle: 'solid',
-    borderColor: 'rgba(255,255,255,0.35)',
-    borderTopColor: '#fff',
-    animation: 'spin 0.6s linear infinite',
-  },
-
-  /* footer */
-  footer: {
-    textAlign: 'center',
-    marginTop: '1.5rem',
-  },
-  backLink: {
-    fontSize: 13,
-    color: '#888',
-    textDecoration: 'none',
-  },
-=======
-'use client';
-
-import { useState, useRef } from 'react';
-import { useRouter } from 'next/navigation';
-
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
-const GREEN  = '#009E60';
-const GREEN_DARK = '#007A4A';
-
-/* ─── Types ────────────────────────────────────────────────── */
-
-interface LoginResponse {
-  accessToken: string;
-  user: unknown;
-}
-
-type Status = 'idle' | 'loading' | 'error';
-
-/* ─── Component ─────────────────────────────────────────────── */
-
-export default function LoginPage() {
-  const router  = useRouter();
-  const emailRef    = useRef<HTMLInputElement>(null);
-  const passwordRef = useRef<HTMLInputElement>(null);
-
-  const [status,  setStatus]  = useState<Status>('idle');
-  const [message, setMessage] = useState('');
-  const [showPwd, setShowPwd] = useState(false);
-
-  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    setStatus('loading');
-    setMessage('');
-
-    try {
-      const res = await fetch(`${BASE_URL}/auth/login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email:    emailRef.current?.value,
-          password: passwordRef.current?.value,
-        }),
-      });
-
-      if (res.status === 401) {
-        setMessage('Email ou mot de passe incorrect.');
-        setStatus('error');
-        return;
-      }
-
-      if (!res.ok) {
-        setMessage(`Erreur serveur (${res.status}). Réessayez plus tard.`);
-        setStatus('error');
-        return;
-      }
-
-      const data = (await res.json()) as LoginResponse;
-      localStorage.setItem('token', data.accessToken);
-      localStorage.setItem('user', JSON.stringify(data.user));
-      router.push('/admin');
-    } catch {
-      setMessage('Impossible de contacter le serveur. Vérifiez votre connexion.');
-      setStatus('error');
-    }
-  }
-
-  const isLoading = status === 'loading';
-
-  return (
-    <main style={styles.page}>
-      {/* ── Card ── */}
-      <div style={styles.card}>
-
-        {/* Logo */}
-        <div style={styles.logoWrap}>
-          <div style={styles.logoIcon}>♟</div>
-          <span style={styles.logoText}>
-            <span style={{ color: GREEN }}>Chess</span>Gabon
-            <span style={styles.logoMuted}>Gestion</span>
-          </span>
-        </div>
-
-        <h1 style={styles.heading}>Connexion administrateur</h1>
-        <p style={styles.hint}>Accès réservé aux membres du bureau.</p>
-
-        {/* Form */}
-        <form onSubmit={handleSubmit} noValidate style={styles.form}>
-
-          {/* Email */}
-          <div style={styles.field}>
-            <label htmlFor="email" style={styles.label}>Adresse e-mail</label>
-            <div style={styles.inputWrap}>
-              <span style={styles.inputIcon} aria-hidden="true">✉</span>
-              <input
-                id="email"
-                ref={emailRef}
-                type="email"
-                autoComplete="email"
-                placeholder="admin@chessgabon.ga"
-                required
-                disabled={isLoading}
-                style={styles.input}
-              />
-            </div>
-          </div>
-
-          {/* Password */}
-          <div style={styles.field}>
-            <label htmlFor="password" style={styles.label}>Mot de passe</label>
-            <div style={styles.inputWrap}>
-              <span style={styles.inputIcon} aria-hidden="true">🔒</span>
-              <input
-                id="password"
-                ref={passwordRef}
-                type={showPwd ? 'text' : 'password'}
-                autoComplete="current-password"
-                placeholder="••••••••"
-                required
-                disabled={isLoading}
-                style={{ ...styles.input, paddingRight: 44 }}
-              />
-              <button
-                type="button"
-                onClick={() => setShowPwd((v) => !v)}
-                style={styles.eyeBtn}
-                aria-label={showPwd ? 'Masquer le mot de passe' : 'Afficher le mot de passe'}
-              >
-                {showPwd ? '🙈' : '👁'}
-              </button>
-            </div>
-          </div>
-
-          {/* Error message */}
-          {status === 'error' && (
-            <div role="alert" style={styles.errorBox}>
-              ⚠ {message}
-            </div>
-          )}
-
-          {/* Submit */}
-          <button
-            type="submit"
-            disabled={isLoading}
-            style={{ ...styles.submitBtn, ...(isLoading ? styles.submitBtnDisabled : {}) }}
-          >
-            {isLoading
-              ? <><span style={styles.spinner} aria-hidden="true" /> Connexion…</>
-              : 'Se connecter'}
-          </button>
-        </form>
-
-        {/* Footer */}
-        <p style={styles.footer}>
-          <a href="/" style={styles.backLink}>← Retour au classement</a>
-        </p>
-      </div>
-    </main>
-  );
-}
-
-/* ─── Styles ─────────────────────────────────────────────────── */
-
-const styles: Record<string, React.CSSProperties> = {
-  page: {
-    minHeight: '100vh',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    background: '#F7F9FC',
-    padding: '24px 16px',
-  },
-
-  card: {
-    width: '100%',
-    maxWidth: 420,
-    background: '#fff',
-    borderRadius: 16,
-    borderWidth: 1,
-    borderStyle: 'solid',
-    borderColor: '#E8EBF0',
-    padding: '2.5rem 2rem',
-  },
-
-  /* logo */
-  logoWrap: {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 10,
-    marginBottom: '1.5rem',
-  },
-  logoIcon: {
-    width: 38,
-    height: 38,
-    background: GREEN,
-    borderRadius: 9,
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    color: '#fff',
-    fontSize: 20,
-  },
-  logoText: {
-    fontSize: 20,
-    fontWeight: 500,
-    letterSpacing: '-0.3px',
-    color: '#1a1a1a',
-  },
-  logoMuted: {
-    color: '#888',
-    fontWeight: 400,
-  },
-
-  /* headings */
-  heading: {
-    fontSize: 20,
-    fontWeight: 500,
-    color: '#1a1a1a',
-    textAlign: 'center',
-    margin: '0 0 6px',
-  },
-  hint: {
-    fontSize: 13,
-    color: '#888',
-    textAlign: 'center',
-    margin: '0 0 1.75rem',
-  },
-
-  /* form */
-  form: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: 16,
-  },
-  field: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: 6,
-  },
-  label: {
-    fontSize: 13,
-    fontWeight: 500,
-    color: '#444',
-  },
-  inputWrap: {
-    position: 'relative',
-    display: 'flex',
-    alignItems: 'center',
-  },
-  inputIcon: {
-    position: 'absolute',
-    left: 12,
-    fontSize: 14,
-    pointerEvents: 'none',
-    color: '#aaa',
-  },
-  input: {
-    width: '100%',
-    padding: '10px 12px 10px 36px',
-    fontSize: 14,
-    fontFamily: 'Inter, Arial, sans-serif',
-    color: '#1a1a1a',
-    background: '#F7F9FC',
-    borderWidth: 1,
-    borderStyle: 'solid',
-    borderColor: '#E0E4EC',
-    borderRadius: 8,
-    outline: 'none',
-  },
-  eyeBtn: {
-    position: 'absolute',
-    right: 10,
-    background: 'none',
-    borderWidth: 0,
-    borderStyle: 'solid',
-    borderColor: 'transparent',
-    cursor: 'pointer',
-    fontSize: 15,
-    padding: 4,
-    color: '#aaa',
-    lineHeight: 1,
-  },
-
-  /* error */
-  errorBox: {
-    fontSize: 13,
-    color: '#a32d2d',
-    background: '#FCEBEB',
-    borderWidth: 1,
-    borderStyle: 'solid',
-    borderColor: '#f7c1c1',
-    borderRadius: 8,
-    padding: '10px 14px',
-  },
-
-  /* submit */
-  submitBtn: {
-    marginTop: 4,
-    padding: '11px',
-    background: GREEN,
-    color: '#fff',
-    borderWidth: 0,
-    borderStyle: 'solid',
-    borderColor: 'transparent',
-    borderRadius: 8,
-    fontSize: 15,
-    fontWeight: 500,
-    fontFamily: 'Inter, Arial, sans-serif',
-    cursor: 'pointer',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    transition: 'background 0.15s',
-  },
-  submitBtnDisabled: {
-    background: GREEN_DARK,
-    cursor: 'not-allowed',
-    opacity: 0.75,
-  },
-  spinner: {
-    display: 'inline-block',
-    width: 15,
-    height: 15,
-    borderRadius: '50%',
-    borderWidth: 2,
-    borderStyle: 'solid',
-    borderColor: 'rgba(255,255,255,0.35)',
-    borderTopColor: '#fff',
-    animation: 'spin 0.6s linear infinite',
-  },
-
-  /* footer */
-  footer: {
-    textAlign: 'center',
-    marginTop: '1.5rem',
-  },
-  backLink: {
-    fontSize: 13,
-    color: '#888',
-    textDecoration: 'none',
-  },
->>>>>>> 2b74049e844e35d7271fdf2b317af138b33ba0c3
-};
