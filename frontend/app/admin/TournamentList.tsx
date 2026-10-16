@@ -557,20 +557,17 @@ const styles: Record<string, React.CSSProperties> = {
     }
   }
 
-  async function deleteTournament(id: number) {
-    if (
-      !confirm(
-        'Voulez-vous vraiment supprimer ce tournoi et tous ses résultats ?'
-      )
-    ) {
-      return;
-    }
+  async function deleteTournament(t: { id: number; name: string }) {
+    const ok = confirm(
+      `Supprimer le tournoi « ${t.name} » ?\n\nTous les résultats associés seront effacés. Cette action est irréversible.`
+    );
+    if (!ok) return;
 
     try {
-      const res = await apiFetch(`/tournaments/${id}`, { method: 'DELETE' });
+      const res = await apiFetch(`/tournaments/${t.id}`, { method: 'DELETE' });
       if (res.ok) {
-        toast.success('Tournoi supprimé.');
-        if (editing?.id === id) setEditing(null);
+        toast.success(`Tournoi « ${t.name} » supprimé.`);
+        if (editing?.id === t.id) setEditing(null);
         void loadTournaments();
       } else {
         toast.error(`Erreur ${res.status} lors de la suppression.`);
@@ -705,7 +702,7 @@ const styles: Record<string, React.CSSProperties> = {
                       <Button
                         size="sm"
                         variant="danger"
-                        onClick={() => void deleteTournament(t.id)}
+                        onClick={() => void deleteTournament(t)}
                       >
                         Supprimer
                       </Button>

@@ -1,0 +1,12 @@
+{
+  "description": "Classement général attendu après prisma db seed.",
+  "championshipScale": { "1": 20, "2": 16, "3": 13, "4": 11, "5": 9, "6": 7, "7": 5, "8": 4, "9": 3, "10": 2, "11+": 1 },
+  "generalRanking": [
+    { "pseudo": "KingNdong", "points": 36, "tournaments": 2 },
+    { "pseudo": "BlitzQueen", "points": 36, "tournaments": 2 },
+    { "pseudo": "RapidLion", "points": 24, "tournaments": 2 },
+    { "pseudo": "RookMaster", "points": 22, "tournaments": 2 },
+    { "pseudo": "ChessGabon01", "points": 20, "tournaments": 2 }
+  ],
+  "admin": { "email": "admin@chessgabon.ga", "password": "Admin123!" }
+}

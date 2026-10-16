@@ -4,16 +4,20 @@ import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
-  LogOut,
-  Users,
-  Trophy,
-  Upload,
-  Search,
+  ArrowDown,
+  ArrowUp,
+  ArrowUpDown,
   ExternalLink,
+  LogOut,
   MoreHorizontal,
   Pencil,
+  Search,
   Trash2,
+  Trophy,
+  Upload,
   UserRound,
+  Users,
+  X,
 } from 'lucide-react';
 import { Logo } from '@/components/Logo';
 import { Avatar } from '@/components/ui/Avatar';
@@ -26,7 +30,7 @@ import {
   AdminPageSkeleton,
   AdminTableSkeleton,
 } from '@/components/ui/Skeleton';
-import { apiFetch, getToken } from '@/lib/api';
+import { apiFetch, clearSession, getToken } from '@/lib/api';
 import { toast } from '@/lib/toast';
 import type { Member, MemberDetail } from '@/lib/types';
 import { cn, formatDate } from '@/lib/utils';
@@ -96,22 +100,70 @@ const TABS: {
   shortLabel: string;
   icon: React.ReactNode;
 }[] = [
-  { id: 'members', label: 'Membres', shortLabel: 'Membres', icon: <Users className="h-4 w-4" /> },
-  { id: 'tournaments', label: 'Tournois', shortLabel: 'Tournois', icon: <Trophy className="h-4 w-4" /> },
-  { id: 'import', label: 'Import CSV', shortLabel: 'CSV', icon: <Upload className="h-4 w-4" /> },
+  {
+    id: 'members',
+    label: 'Membres',
+    shortLabel: 'Membres',
+    icon: <Users className="h-4 w-4" />,
+  },
+  {
+    id: 'tournaments',
+    label: 'Tournois',
+    shortLabel: 'Tournois',
+    icon: <Trophy className="h-4 w-4" />,
+  },
+  {
+    id: 'import',
+    label: 'Import CSV',
+    shortLabel: 'CSV',
+    icon: <Upload className="h-4 w-4" />,
+  },
 ];
 
 function MemberFormFields({ defaults }: { defaults?: Member }) {
   return (
     <>
       <div className="grid gap-3 sm:grid-cols-2">
-        <Input id="firstName" name="firstName" label="Prénom" placeholder="Jean" defaultValue={defaults?.firstName} required />
-        <Input id="lastName" name="lastName" label="Nom" placeholder="Ndong" defaultValue={defaults?.lastName} required />
+        <Input
+          id="firstName"
+          name="firstName"
+          label="Prénom"
+          placeholder="Jean"
+          defaultValue={defaults?.firstName}
+          required
+        />
+        <Input
+          id="lastName"
+          name="lastName"
+          label="Nom"
+          placeholder="Ndong"
+          defaultValue={defaults?.lastName}
+          required
+        />
       </div>
-      <Input id="pseudo" name="pseudo" label="Pseudo" placeholder="KingNdong" defaultValue={defaults?.pseudo} required />
+      <Input
+        id="pseudo"
+        name="pseudo"
+        label="Pseudo"
+        placeholder="KingNdong"
+        required
+        defaultValue={defaults?.pseudo}
+      />
       <div className="grid gap-3 sm:grid-cols-2">
-        <Input id="lichess" name="lichess" label="Lichess" placeholder="pseudo-lichess" defaultValue={defaults?.lichess} />
-        <Input id="chesscom" name="chesscom" label="Chess.com" placeholder="pseudo-chesscom" defaultValue={defaults?.chesscom} />
+        <Input
+          id="lichess"
+          name="lichess"
+          label="Lichess"
+          placeholder="pseudo-lichess"
+          defaultValue={defaults?.lichess}
+        />
+        <Input
+          id="chesscom"
+          name="chesscom"
+          label="Chess.com"
+          placeholder="pseudo-chesscom"
+          defaultValue={defaults?.chesscom}
+        />
       </div>
     </>
   );
@@ -129,11 +181,16 @@ export default function AdminPage() {
   const [sortColumn, setSortColumn] = useState<SortColumn>('pseudo');
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
   const [addLoading, setAddLoading] = useState(false);
+  const [stats, setStats] = useState<{
+    membersCount: number;
+    tournamentsCount: number;
+    resultsCount: number;
+    lastTournamentName?: string;
+  } | null>(null);
 
   function logout() {
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
-    router.push('/login');
+    clearSession();
+    router.replace('/login');
   }
 
   async function authFetch(path: string, options: RequestInit = {}): Promise<Response> {
@@ -142,6 +199,27 @@ export default function AdminPage() {
     return res;
   }
 
+  const loadDashboard = useCallback(async () => {
+    try {
+      const res = await authFetch('/rankings/dashboard');
+      if (!res.ok) return;
+      const data = (await res.json()) as {
+        membersCount: number;
+        tournamentsCount: number;
+        resultsCount: number;
+        lastTournament?: { name?: string } | null;
+      };
+      setStats({
+        membersCount: data.membersCount ?? 0,
+        tournamentsCount: data.tournamentsCount ?? 0,
+        resultsCount: data.resultsCount ?? 0,
+        lastTournamentName: data.lastTournament?.name,
+      });
+    } catch {
+      /* network */
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   const loadMembers = useCallback(async () => {
     setMembersLoading(true);
     try {
@@ -149,12 +227,13 @@ export default function AdminPage() {
       if (!res.ok) return;
       const data: unknown = await res.json();
       setMembers(Array.isArray(data) ? (data as Member[]) : []);
+      void loadDashboard();
     } catch {
       /* network */
     } finally {
       setMembersLoading(false);
     }
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [loadDashboard]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function loadMemberResults(id: number) {
     try {
@@ -170,12 +249,13 @@ export default function AdminPage() {
 
   useEffect(() => {
     if (!getToken()) {
-      router.push('/login');
+      router.replace('/login');
       return;
     }
     setReady(true);
     void loadMembers();
-  }, [loadMembers, router]);
+    void loadDashboard();
+  }, [loadMembers, loadDashboard, router]);
 
   function readFormData(form: HTMLFormElement): MemberFormData {
     const fd = new FormData(form);
@@ -230,13 +310,17 @@ export default function AdminPage() {
     }
   }
 
-  async function deleteMember(id: number) {
-    if (!confirm('Voulez-vous vraiment supprimer ce membre ?')) return;
+  async function deleteMember(member: Member) {
+    const ok = confirm(
+      `Supprimer le membre « ${member.pseudo} » ?\n\nSes résultats de tournoi seront également supprimés. Cette action est irréversible.`
+    );
+    if (!ok) return;
     try {
-      const res = await authFetch(`/members/${id}`, { method: 'DELETE' });
+      const res = await authFetch(`/members/${member.id}`, { method: 'DELETE' });
       if (res.ok) {
-        toast.success('Membre supprimé');
-        if (selectedMember?.id === id) setSelectedMember(null);
+        toast.success(`Membre « ${member.pseudo} » supprimé`);
+        if (selectedMember?.id === member.id) setSelectedMember(null);
+        if (editingMember?.id === member.id) setEditingMember(null);
         void loadMembers();
       } else {
         toast.error('Erreur lors de la suppression');
@@ -254,12 +338,22 @@ export default function AdminPage() {
   const filteredMembers = members
     .filter(({ pseudo, firstName, lastName, lichess, chesscom }) => {
       const s = searchTerm.toLowerCase();
-      return [pseudo, firstName, lastName, lichess, chesscom].some((v) => v?.toLowerCase().includes(s));
+      return [pseudo, firstName, lastName, lichess, chesscom].some((v) =>
+        v?.toLowerCase().includes(s)
+      );
     })
     .sort((a, b) => {
       const va = String(a[sortColumn] ?? '').toLowerCase();
       const vb = String(b[sortColumn] ?? '').toLowerCase();
-      return va < vb ? (sortDirection === 'asc' ? -1 : 1) : va > vb ? (sortDirection === 'asc' ? 1 : -1) : 0;
+      return va < vb
+        ? sortDirection === 'asc'
+          ? -1
+          : 1
+        : va > vb
+          ? sortDirection === 'asc'
+            ? 1
+            : -1
+          : 0;
     });
 
   if (!ready) return <AdminPageSkeleton />;
@@ -273,9 +367,12 @@ export default function AdminPage() {
             <Badge variant="brand">Admin</Badge>
           </div>
           <div className="flex items-center gap-2">
-            <Link href="/" className="hidden items-center gap-1.5 text-sm text-muted transition hover:text-brand sm:inline-flex">
+            <Link
+              href="/"
+              className="hidden items-center gap-1.5 text-sm text-muted transition hover:text-brand sm:inline-flex"
+            >
               <ExternalLink className="h-3.5 w-3.5" />
-              Classement public
+              Site public
             </Link>
             <Button variant="ghost" size="sm" onClick={logout}>
               <LogOut className="h-4 w-4" />
@@ -287,7 +384,10 @@ export default function AdminPage() {
 
       <div className="sticky top-14 z-10 border-b border-border bg-white/95 backdrop-blur">
         <div className="mx-auto max-w-6xl px-2 sm:px-6">
-          <nav aria-label="Sections administration" className="flex gap-1 overflow-x-auto px-2 py-2 scrollbar-none sm:px-0">
+          <nav
+            aria-label="Sections administration"
+            className="flex gap-1 overflow-x-auto px-2 py-2 scrollbar-none sm:px-0"
+          >
             {TABS.map((t) => (
               <button
                 key={t.id}
@@ -296,7 +396,9 @@ export default function AdminPage() {
                 className={cn(
                   'inline-flex shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg px-3 py-2 text-sm font-medium transition-all duration-150 sm:flex-1 sm:gap-2 sm:px-4 sm:py-2.5',
                   'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/30',
-                  tab === t.id ? 'bg-brand text-white shadow-md' : 'text-gray-600 hover:bg-brand-light hover:text-brand active:scale-[0.98]'
+                  tab === t.id
+                    ? 'bg-brand text-white shadow-md'
+                    : 'text-gray-600 hover:bg-brand-light hover:text-brand active:scale-[0.98]'
                 )}
               >
                 {t.icon}
@@ -309,6 +411,29 @@ export default function AdminPage() {
       </div>
 
       <main className="mx-auto max-w-6xl space-y-6 px-4 py-6 sm:px-6">
+        {stats && (
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <div className="rounded-xl border border-border bg-white p-3.5 shadow-sm">
+              <p className="text-xs font-medium text-muted">Membres</p>
+              <p className="mt-1 text-2xl font-bold tabular-nums text-gray-900">{stats.membersCount}</p>
+            </div>
+            <div className="rounded-xl border border-border bg-white p-3.5 shadow-sm">
+              <p className="text-xs font-medium text-muted">Tournois</p>
+              <p className="mt-1 text-2xl font-bold tabular-nums text-gray-900">{stats.tournamentsCount}</p>
+            </div>
+            <div className="rounded-xl border border-border bg-white p-3.5 shadow-sm">
+              <p className="text-xs font-medium text-muted">Résultats</p>
+              <p className="mt-1 text-2xl font-bold tabular-nums text-gray-900">{stats.resultsCount}</p>
+            </div>
+            <div className="rounded-xl border border-border bg-white p-3.5 shadow-sm">
+              <p className="text-xs font-medium text-muted">Dernier tournoi</p>
+              <p className="mt-1 truncate text-sm font-semibold text-gray-900" title={stats.lastTournamentName}>
+                {stats.lastTournamentName || '—'}
+              </p>
+            </div>
+          </div>
+        )}
+
         {tab === 'members' && (
           <div className="space-y-6">
             <Card title="Ajouter un membre">
@@ -324,7 +449,9 @@ export default function AdminPage() {
               <Card
                 title={`Modifier — ${editingMember.pseudo}`}
                 action={
-                  <Button variant="ghost" size="sm" onClick={() => setEditingMember(null)}>Annuler</Button>
+                  <Button variant="ghost" size="sm" onClick={() => setEditingMember(null)}>
+                    Annuler
+                  </Button>
                 }
               >
                 <form onSubmit={updateMember} className="space-y-4">
@@ -338,7 +465,9 @@ export default function AdminPage() {
               title="Liste des membres"
               action={
                 <Badge variant="gray">
-                  {membersLoading ? '…' : `${filteredMembers.length} membre${filteredMembers.length !== 1 ? 's' : ''}`}
+                  {membersLoading
+                    ? '…'
+                    : `${filteredMembers.length} membre${filteredMembers.length !== 1 ? 's' : ''}`}
                 </Badge>
               }
             >
@@ -346,94 +475,127 @@ export default function AdminPage() {
                 <AdminTableSkeleton />
               ) : (
                 <>
-                  <div className="mb-4 flex items-center gap-2">
-                    <div className="relative max-w-xs flex-1">
+                  <div className="mb-4">
+                    <div className="relative max-w-sm">
                       <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
                       <input
                         type="search"
-                        placeholder="Rechercher…"
+                        placeholder="Pseudo, nom, Lichess, Chess.com…"
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
-                        className="w-full rounded-lg border border-border bg-white py-2 pl-9 pr-3 text-sm outline-none focus:border-brand focus:ring-2 focus:ring-brand/20"
+                        className="w-full rounded-lg border border-border bg-white py-2.5 pl-9 pr-9 text-sm outline-none focus:border-brand focus:ring-2 focus:ring-brand/20"
                         aria-label="Rechercher un membre"
                       />
+                      {searchTerm ? (
+                        <button
+                          type="button"
+                          onClick={() => setSearchTerm('')}
+                          className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md p-1 text-gray-400 hover:bg-gray-100"
+                          aria-label="Effacer"
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      ) : null}
                     </div>
                   </div>
 
-                  {filteredMembers.length === 0 ? (
-                    <EmptyState variant="search" title="Aucun résultat" message="Aucun membre ne correspond à votre recherche." />
+                  {members.length === 0 ? (
+                    <EmptyState
+                      variant="empty"
+                      title="Aucun membre"
+                      message="Ajoutez votre premier membre ou importez un CSV."
+                    />
+                  ) : filteredMembers.length === 0 ? (
+                    <EmptyState
+                      variant="search"
+                      title="Aucun résultat"
+                      message="Aucun membre ne correspond à votre recherche."
+                      action={
+                        <button type="button" onClick={() => setSearchTerm('')} className="text-sm font-medium text-brand hover:underline">
+                          Effacer la recherche
+                        </button>
+                      }
+                    />
                   ) : (
                     <>
-                      {/* Mobile cards */}
-                      <ul className="divide-y divide-border rounded-lg border border-border sm:hidden">
+                      <ul className="space-y-2 sm:hidden">
                         {filteredMembers.map((m) => (
-                          <li key={m.id} className="flex items-start gap-3 px-3 py-3">
-                            <Avatar name={`${m.firstName} ${m.lastName}`} size="sm" />
-                            <div className="min-w-0 flex-1">
-                              <button type="button" className="font-medium text-blue hover:underline" onClick={() => void loadMemberResults(m.id)}>
-                                {m.pseudo}
-                              </button>
-                              <p className="truncate text-xs text-muted">{m.firstName} {m.lastName}</p>
-                              <p className="mt-0.5 truncate text-[11px] text-muted">
-                                {[m.lichess && `♟ ${m.lichess}`, m.chesscom && `♞ ${m.chesscom}`].filter(Boolean).join(' · ') || 'Pas de comptes liés'}
-                              </p>
-                            </div>
-                            <details className="relative shrink-0">
-                              <summary
-                                className="flex h-8 w-8 cursor-pointer list-none items-center justify-center rounded-lg text-muted hover:bg-gray-100 hover:text-gray-900 [&::-webkit-details-marker]:hidden"
-                                aria-label={`Actions pour ${m.pseudo}`}
-                              >
-                                <MoreHorizontal className="h-4 w-4" />
-                              </summary>
-                              <div className="absolute right-0 z-20 mt-1 w-40 overflow-hidden rounded-lg border border-border bg-white py-1 shadow-lg">
-                                <button type="button" className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50" onClick={() => void loadMemberResults(m.id)}>
-                                  <UserRound className="h-3.5 w-3.5" /> Fiche
+                          <li key={m.id} className="rounded-xl border border-border bg-white p-3 shadow-sm">
+                            <div className="flex items-start gap-3">
+                              <Avatar name={`${m.firstName} ${m.lastName}`} size="sm" />
+                              <div className="min-w-0 flex-1">
+                                <button type="button" className="text-left font-semibold text-gray-900 hover:text-brand" onClick={() => void loadMemberResults(m.id)}>
+                                  {m.pseudo}
                                 </button>
-                                <button type="button" className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50" onClick={() => setEditingMember(m)}>
-                                  <Pencil className="h-3.5 w-3.5" /> Modifier
-                                </button>
-                                <button type="button" className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50" onClick={() => void deleteMember(m.id)}>
-                                  <Trash2 className="h-3.5 w-3.5" /> Supprimer
-                                </button>
+                                <p className="truncate text-xs text-muted">{m.firstName} {m.lastName}</p>
+                                <div className="mt-1.5 flex flex-wrap gap-1">
+                                  {m.lichess ? <span className="rounded-full bg-surface px-2 py-0.5 text-[10px] font-medium text-gray-600 ring-1 ring-border">Lichess · {m.lichess}</span> : null}
+                                  {m.chesscom ? <span className="rounded-full bg-surface px-2 py-0.5 text-[10px] font-medium text-gray-600 ring-1 ring-border">Chess.com · {m.chesscom}</span> : null}
+                                  {!m.lichess && !m.chesscom ? <span className="text-[10px] text-muted">Pas de comptes liés</span> : null}
+                                </div>
                               </div>
-                            </details>
+                              <details className="relative shrink-0">
+                                <summary className="flex h-9 w-9 cursor-pointer list-none items-center justify-center rounded-lg text-muted hover:bg-gray-100 [&::-webkit-details-marker]:hidden" aria-label={`Actions ${m.pseudo}`}>
+                                  <MoreHorizontal className="h-4 w-4" />
+                                </summary>
+                                <div className="absolute right-0 z-20 mt-1 w-44 overflow-hidden rounded-xl border border-border bg-white py-1 shadow-lg">
+                                  <button type="button" className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm hover:bg-gray-50" onClick={() => void loadMemberResults(m.id)}>
+                                    <UserRound className="h-3.5 w-3.5" /> Voir la fiche
+                                  </button>
+                                  <button type="button" className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm hover:bg-gray-50" onClick={() => setEditingMember(m)}>
+                                    <Pencil className="h-3.5 w-3.5" /> Modifier
+                                  </button>
+                                  <button type="button" className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm text-red-600 hover:bg-red-50" onClick={() => void deleteMember(m)}>
+                                    <Trash2 className="h-3.5 w-3.5" /> Supprimer
+                                  </button>
+                                </div>
+                              </details>
+                            </div>
                           </li>
                         ))}
                       </ul>
 
-                      {/* Desktop table */}
-                      <div className="hidden overflow-x-auto rounded-lg border border-border sm:block">
-                        <table className="w-full min-w-[700px] text-left text-sm">
+                      <div className="hidden overflow-hidden rounded-xl border border-border sm:block">
+                        <table className="w-full min-w-[720px] text-left text-sm">
                           <thead>
                             <tr className="bg-brand text-white">
-                              {([['pseudo', 'Pseudo'], ['firstName', 'Prénom'], ['lastName', 'Nom'], ['lichess', 'Lichess'], ['chesscom', 'Chess.com']] as [SortColumn, string][]).map(([col, label]) => (
+                              {([['pseudo', 'Joueur'], ['firstName', 'Prénom'], ['lastName', 'Nom'], ['lichess', 'Lichess'], ['chesscom', 'Chess.com']] as [SortColumn, string][]).map(([col, label]) => (
                                 <th key={col} className="px-3 py-2.5 font-medium">
-                                  <button type="button" onClick={() => sortBy(col)} className="inline-flex items-center gap-1 hover:underline">
+                                  <button type="button" onClick={() => sortBy(col)} className="inline-flex items-center gap-1.5 hover:underline">
                                     {label}
-                                    <span className="text-xs opacity-70">{sortColumn === col ? (sortDirection === 'asc' ? '↑' : '↓') : '↕'}</span>
+                                    {sortColumn === col ? (sortDirection === 'asc' ? <ArrowUp className="h-3.5 w-3.5" /> : <ArrowDown className="h-3.5 w-3.5" />) : <ArrowUpDown className="h-3.5 w-3.5 opacity-50" />}
                                   </button>
                                 </th>
                               ))}
-                              <th className="px-3 py-2.5 font-medium">Actions</th>
+                              <th className="px-3 py-2.5 text-right font-medium">Actions</th>
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-border bg-white">
                             {filteredMembers.map((m) => (
                               <tr key={m.id} className="table-row-interactive">
                                 <td className="px-3 py-2.5">
-                                  <div className="flex items-center gap-2">
+                                  <div className="flex items-center gap-2.5">
                                     <Avatar name={`${m.firstName} ${m.lastName}`} size="sm" />
-                                    <button type="button" className="font-medium text-blue hover:underline" onClick={() => void loadMemberResults(m.id)}>{m.pseudo}</button>
+                                    <button type="button" className="font-medium text-gray-900 hover:text-brand hover:underline" onClick={() => void loadMemberResults(m.id)}>
+                                      {m.pseudo}
+                                    </button>
                                   </div>
                                 </td>
                                 <td className="px-3 py-2.5 text-muted">{m.firstName}</td>
                                 <td className="px-3 py-2.5 text-muted">{m.lastName}</td>
-                                <td className="px-3 py-2.5 text-muted">{m.lichess || '—'}</td>
-                                <td className="px-3 py-2.5 text-muted">{m.chesscom || '—'}</td>
+                                <td className="px-3 py-2.5">{m.lichess ? <span className="font-medium">{m.lichess}</span> : <span className="text-muted">—</span>}</td>
+                                <td className="px-3 py-2.5">{m.chesscom ? <span className="font-medium">{m.chesscom}</span> : <span className="text-muted">—</span>}</td>
                                 <td className="px-3 py-2.5">
-                                  <div className="flex gap-1.5">
-                                    <Button size="sm" variant="secondary" onClick={() => setEditingMember(m)}>Modifier</Button>
-                                    <Button size="sm" variant="danger" onClick={() => void deleteMember(m.id)}>Supprimer</Button>
+                                  <div className="flex justify-end gap-1.5">
+                                    <Button size="sm" variant="ghost" onClick={() => void loadMemberResults(m.id)} aria-label="Fiche">
+                                      <UserRound className="h-3.5 w-3.5" />
+                                    </Button>
+                                    <Button size="sm" variant="secondary" onClick={() => setEditingMember(m)}>
+                                      <Pencil className="h-3.5 w-3.5" />
+                                    </Button>
+                                    <Button size="sm" variant="danger" onClick={() => void deleteMember(m)} aria-label="Supprimer">
+                                      <Trash2 className="h-3.5 w-3.5" />
+                                    </Button>
                                   </div>
                                 </td>
                               </tr>
@@ -450,11 +612,21 @@ export default function AdminPage() {
             {selectedMember && (
               <Card
                 title={`Résultats — ${selectedMember.pseudo}`}
-                action={<Button size="sm" variant="ghost" onClick={() => setSelectedMember(null)}>Fermer</Button>}
+                action={
+                  <Button size="sm" variant="ghost" onClick={() => setSelectedMember(null)}>
+                    Fermer
+                  </Button>
+                }
               >
-                <div className="mb-4 flex flex-wrap gap-3">
-                  <Badge variant="brand">{selectedMember.totalPoints} pts championnat</Badge>
-                  <Badge variant="gray">{selectedMember.tournamentsPlayed} tournoi{selectedMember.tournamentsPlayed !== 1 ? 's' : ''}</Badge>
+                <div className="mb-4 flex flex-wrap items-center gap-2">
+                  <div className="flex items-center gap-2 rounded-lg bg-brand-light px-3 py-2">
+                    <span className="text-xs font-medium text-brand-dark">Points</span>
+                    <span className="text-sm font-bold tabular-nums text-brand-dark">{selectedMember.totalPoints}</span>
+                  </div>
+                  <div className="flex items-center gap-2 rounded-lg bg-surface px-3 py-2 ring-1 ring-border">
+                    <span className="text-xs font-medium text-muted">Tournois</span>
+                    <span className="text-sm font-bold tabular-nums">{selectedMember.tournamentsPlayed}</span>
+                  </div>
                 </div>
                 {selectedMember.results?.length ? (
                   <div className="overflow-x-auto rounded-lg border border-border">
@@ -489,13 +661,19 @@ export default function AdminPage() {
 
         {tab === 'tournaments' && (
           <div className="space-y-6">
-            <Card title="Créer un tournoi"><TournamentForm /></Card>
-            <Card title="Liste des tournois"><TournamentList /></Card>
+            <Card title="Créer un tournoi">
+              <TournamentForm />
+            </Card>
+            <Card title="Liste des tournois">
+              <TournamentList />
+            </Card>
           </div>
         )}
 
         {tab === 'import' && (
-          <Card title="Importer un classement CSV"><ImportCsvForm /></Card>
+          <Card title="Importer un classement CSV">
+            <ImportCsvForm />
+          </Card>
         )}
       </main>
     </div>

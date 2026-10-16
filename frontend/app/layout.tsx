@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next';
 import type { ReactNode } from 'react';
+import { PageTransition } from '@/components/PageTransition';
 import { ToastContainer } from '@/components/ui/Toast';
 import './globals.css';
 
@@ -86,7 +87,7 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="fr">
+    <html lang="fr" data-scroll-behavior="smooth">
       <head>
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link
@@ -99,8 +100,8 @@ export default function RootLayout({ children }: { children: ReactNode }) {
           rel="stylesheet"
         />
       </head>
-      <body>
-        {children}
+      <body className="flex min-h-dvh flex-col">
+        <PageTransition>{children}</PageTransition>
         <ToastContainer />
       </body>
     </html>

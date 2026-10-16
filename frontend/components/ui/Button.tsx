@@ -26,9 +26,9 @@ const variants: Record<Variant, string> = {
 };
 
 const sizes: Record<Size, string> = {
-  sm: 'px-3 py-1.5 text-xs rounded-lg',
-  md: 'px-4 py-2 text-sm rounded-lg',
-  lg: 'px-5 py-2.5 text-base rounded-xl',
+  sm: 'min-h-9 px-3 py-1.5 text-xs rounded-lg sm:min-h-0',
+  md: 'min-h-11 px-4 py-2 text-sm rounded-lg sm:min-h-0',
+  lg: 'min-h-12 px-5 py-2.5 text-base rounded-xl sm:min-h-0',
 };
 
 export function Button({
@@ -43,7 +43,7 @@ export function Button({
   return (
     <button
       className={cn(
-        'inline-flex items-center justify-center gap-2 border font-medium transition-all duration-150',
+        'inline-flex items-center justify-center gap-2 border font-medium transition-all duration-150 touch-manipulation',
         'focus:outline-none focus-visible:ring-2 focus-visible:ring-brand/40 focus-visible:ring-offset-2',
         'disabled:pointer-events-none disabled:opacity-60',
         variants[variant],
