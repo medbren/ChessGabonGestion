@@ -3,6 +3,7 @@ import {
   Controller,
   Delete,
   Get,
+  NotFoundException,
   Param,
   Patch,
   Post,
@@ -14,6 +15,7 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 
 // Routes :
 // GET  /tournaments              — public (liste)
+// GET  /tournaments/:id          — public (fiche + résultats)
 // POST/PATCH/DELETE              — JWT admin
 @Controller('tournaments')
 export class TournamentsController {
@@ -23,6 +25,16 @@ export class TournamentsController {
   @Get()
   findAll() {
     return this.service.findAll();
+  }
+
+  // GET /tournaments/:id — public (fiche + classement)
+  @Get(':id')
+  async findOne(@Param('id') id: string) {
+    const tournament = await this.service.findOne(Number(id));
+    if (!tournament) {
+      throw new NotFoundException('Tournoi introuvable');
+    }
+    return tournament;
   }
 
   @Post()

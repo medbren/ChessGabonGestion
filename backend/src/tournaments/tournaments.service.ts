@@ -5,20 +5,6 @@ import { PrismaService } from '../prisma/prisma.service';
 export class TournamentsService {
   constructor(private prisma: PrismaService) {}
 
-  // =====================================================
-  // CALCUL DES POINTS CHAMPIONNAT
-  // =====================================================
-  //
-  // Cette méthode applique le règlement Chess Gabon.
-  //
-  // Exemple :
-  // 1er  -> 20 points
-  // 2e   -> 16 points
-  // 3e   -> 13 points
-  // ...
-  // 11e+ -> 1 point
-  //
-  // Ces points sont utilisés pour les classements annuels.
   private calculateChampionshipPoints(rank?: number) {
     if (!rank) return 0;
 
@@ -35,17 +21,37 @@ export class TournamentsService {
       10: 2,
     };
 
-    // Si le rang est supérieur à 10,
-    // le joueur reçoit automatiquement 1 point.
     return pointsByRank[rank] ?? 1;
   }
 
-  // =====================================================
-  // LISTE DES TOURNOIS
-  // =====================================================
-  //
-  // Retourne tous les tournois triés du plus récent
-  // au plus ancien.
+  /** Détail public d'un tournoi avec résultats + membres */
+  findOne(id: number) {
+    return this.prisma.tournament.findUnique({
+      where: { id },
+      include: {
+        results: {
+          orderBy: [
+            { rank: 'asc' },
+            { championshipPoints: 'desc' },
+            { points: 'desc' },
+          ],
+          include: {
+            member: {
+              select: {
+                id: true,
+                pseudo: true,
+                firstName: true,
+                lastName: true,
+                chesscom: true,
+                lichess: true,
+              },
+            },
+          },
+        },
+      },
+    });
+  }
+
   findAll() {
     return this.prisma.tournament.findMany({
       orderBy: {
@@ -57,13 +63,6 @@ export class TournamentsService {
     });
   }
 
-  // =====================================================
-  // CRÉATION D'UN TOURNOI
-  // =====================================================
-  //
-  // Utilisé depuis :
-  // - le formulaire admin
-  // - l'import CSV
   create(data: {
     name: string;
     platform: 'LICHESS' | 'CHESSCOM' | 'OTHER';
@@ -73,24 +72,13 @@ export class TournamentsService {
     return this.prisma.tournament.create({
       data: {
         name: data.name,
-
-        // Plateforme d'origine du tournoi.
         platform: data.platform,
-
-        // Cadence du tournoi.
         timeControl: data.timeControl,
-
-        // Conversion de la date texte vers Date.
         date: new Date(data.date),
       },
     });
   }
 
-  // =====================================================
-  // MODIFICATION D'UN TOURNOI
-  // =====================================================
-  //
-  // Permet de modifier un tournoi existant.
   update(
     id: number,
     data: {
@@ -104,32 +92,13 @@ export class TournamentsService {
       where: {
         id,
       },
-
       data: {
         ...data,
-
-        // Conversion de la date si elle est fournie.
-        date: data.date
-          ? new Date(data.date)
-          : undefined,
+        date: data.date ? new Date(data.date) : undefined,
       },
     });
   }
 
-  // =====================================================
-  // AJOUT D'UN RÉSULTAT
-  // =====================================================
-  //
-  // Cette méthode est appelée pendant l'import CSV.
-  //
-  // Exemple :
-  // Joueur : Mederic
-  // Rang : 3
-  // Score : 7.5
-  //
-  // Résultat :
-  // points = 7.5
-  // championshipPoints = 13
   addResult(
     tournamentId: number,
     data: {
@@ -138,15 +107,8 @@ export class TournamentsService {
       rank?: number;
     },
   ) {
-    // Calcul automatique des points championnat.
-    const championshipPoints =
-      this.calculateChampionshipPoints(
-        data.rank,
-      );
+    const championshipPoints = this.calculateChampionshipPoints(data.rank);
 
-    // Upsert :
-    // - crée le résultat s'il n'existe pas
-    // - met à jour le résultat s'il existe déjà
     return this.prisma.result.upsert({
       where: {
         memberId_tournamentId: {
@@ -154,41 +116,24 @@ export class TournamentsService {
           tournamentId,
         },
       },
-
+      create: {
+        memberId: data.memberId,
+        tournamentId,
+        points: data.points,
+        rank: data.rank,
+        championshipPoints,
+      },
       update: {
         points: data.points,
         rank: data.rank,
         championshipPoints,
       },
-
-      create: {
-        memberId: data.memberId,
-        tournamentId,
-
-        // Score réel obtenu dans le tournoi.
-        points: data.points,
-
-        // Classement obtenu.
-        rank: data.rank,
-
-        // Points championnat calculés automatiquement.
-        championshipPoints,
-      },
     });
   }
 
-  // =====================================================
-  // SUPPRESSION D'UN TOURNOI
-  // =====================================================
-  //
-  // Grâce au Cascade défini dans Prisma :
-  // - le tournoi est supprimé
-  // - tous les résultats associés sont supprimés
   delete(id: number) {
     return this.prisma.tournament.delete({
-      where: {
-        id,
-      },
+      where: { id },
     });
   }
 }

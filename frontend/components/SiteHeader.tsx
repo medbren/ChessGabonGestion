@@ -4,8 +4,19 @@ import type { ReactNode } from 'react';
 import { useEffect, useId, useRef, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Info, ListOrdered, Menu, Trophy, X } from 'lucide-react';
+import {
+  Info,
+  LayoutDashboard,
+  ListOrdered,
+  LogIn,
+  Menu,
+  Trophy,
+  UserRound,
+  X,
+} from 'lucide-react';
 import { Logo } from '@/components/Logo';
+import { ThemeToggle } from '@/components/ThemeToggle';
+import { getStoredUser, getToken } from '@/lib/api';
 import { cn } from '@/lib/utils';
 
 const NAV = [
@@ -14,8 +25,94 @@ const NAV = [
   { href: '/a-propos', label: 'À propos', icon: Info },
 ] as const;
 
+interface StoredUser {
+  id?: number | string;
+  email?: string;
+  role?: string;
+  name?: string;
+  pseudo?: string;
+}
+
 interface SiteHeaderProps {
   action?: ReactNode;
+}
+
+function useAuthLabel() {
+  const [ready, setReady] = useState(false);
+  const [authed, setAuthed] = useState(false);
+  const [label, setLabel] = useState('Connexion');
+
+  useEffect(() => {
+    const token = getToken();
+    const user = getStoredUser<StoredUser>();
+    setAuthed(!!token);
+    if (token && user) {
+      const name =
+        user.pseudo ||
+        user.name ||
+        (user.email ? user.email.split('@')[0] : null) ||
+        (user.role === 'ADMIN' ? 'Admin' : null) ||
+        'Compte';
+      setLabel(name);
+    } else if (token) {
+      setLabel('Admin');
+    } else {
+      setLabel('Connexion');
+    }
+    setReady(true);
+  }, []);
+
+  return { ready, authed, label };
+}
+
+function AccountButton({ compact = false }: { compact?: boolean }) {
+  const { ready, authed, label } = useAuthLabel();
+
+  if (!ready) {
+    return (
+      <span
+        className={cn(
+          'inline-flex items-center rounded-lg border border-border bg-white',
+          compact ? 'h-10 px-3 text-sm' : 'h-9 gap-1.5 px-3 text-sm',
+        )}
+        aria-hidden
+      >
+        <span className="h-3.5 w-12 animate-pulse rounded bg-gray-100" />
+      </span>
+    );
+  }
+
+  if (authed) {
+    return (
+      <Link
+        href="/admin"
+        className={cn(
+          'inline-flex items-center gap-1.5 rounded-lg border border-brand/25 bg-brand-light font-medium text-brand-dark shadow-sm transition hover:bg-brand hover:text-white',
+          compact ? 'h-10 px-3 text-sm' : 'h-9 px-3 text-sm',
+        )}
+        title="Espace administration"
+      >
+        <UserRound className="h-4 w-4 shrink-0" aria-hidden />
+        <span className="max-w-[9rem] truncate">{label}</span>
+        {!compact ? (
+          <LayoutDashboard className="hidden h-3.5 w-3.5 opacity-70 sm:inline" aria-hidden />
+        ) : null}
+      </Link>
+    );
+  }
+
+  return (
+    <Link
+      href="/login"
+      className={cn(
+        'inline-flex items-center gap-1.5 rounded-lg border border-border bg-white font-medium text-gray-800 shadow-sm transition hover:border-brand/40 hover:bg-brand-light hover:text-brand-dark',
+        compact ? 'h-10 px-3 text-sm' : 'h-9 px-3 text-sm',
+      )}
+    >
+      <LogIn className="h-4 w-4 shrink-0" aria-hidden />
+      <span>Connexion</span>
+    </Link>
+  );
 }
 
 export function SiteHeader({ action }: SiteHeaderProps = {}) {
@@ -25,6 +122,9 @@ export function SiteHeader({ action }: SiteHeaderProps = {}) {
   const panelId = useId();
   const menuBtnRef = useRef<HTMLButtonElement>(null);
   const closeBtnRef = useRef<HTMLButtonElement>(null);
+  const { authed } = useAuthLabel();
+
+  const accountAction = action ?? <AccountButton />;
 
   useEffect(() => {
     function onScroll() {
@@ -48,7 +148,6 @@ export function SiteHeader({ action }: SiteHeaderProps = {}) {
 
     const prevOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
-
     const t = window.setTimeout(() => closeBtnRef.current?.focus(), 0);
 
     function onKey(e: KeyboardEvent) {
@@ -72,9 +171,6 @@ export function SiteHeader({ action }: SiteHeaderProps = {}) {
     } else if (active?.closest?.('[data-mobile-drawer]')) {
       active.blur();
     }
-    drawer?.querySelectorAll<HTMLElement>('a, button, [tabindex]').forEach((el) => {
-      if (el === document.activeElement) el.blur();
-    });
     setOpen(false);
     window.setTimeout(() => menuBtnRef.current?.focus(), 0);
   }
@@ -91,7 +187,7 @@ export function SiteHeader({ action }: SiteHeaderProps = {}) {
           'sticky top-0 z-30 border-b bg-white/95 pt-safe backdrop-blur-md transition-shadow duration-200 supports-[backdrop-filter]:bg-white/90',
           scrolled
             ? 'border-border/80 shadow-sm shadow-black/5'
-            : 'border-border shadow-none'
+            : 'border-border shadow-none',
         )}
       >
         <div className="mx-auto flex h-12 max-w-5xl items-center gap-2 px-3 sm:h-14 sm:gap-4 sm:px-6">
@@ -115,7 +211,7 @@ export function SiteHeader({ action }: SiteHeaderProps = {}) {
                       'group relative inline-flex shrink-0 items-center rounded-lg px-3 py-1.5 text-sm font-medium transition-colors',
                       active
                         ? 'bg-brand-light text-brand-dark'
-                        : 'text-muted hover:bg-gray-50 hover:text-gray-900'
+                        : 'text-muted hover:bg-gray-50 hover:text-gray-900',
                     )}
                   >
                     {item.label}
@@ -124,7 +220,7 @@ export function SiteHeader({ action }: SiteHeaderProps = {}) {
                         'pointer-events-none absolute bottom-1 left-1/2 h-0.5 w-4 -translate-x-1/2 rounded-full bg-brand transition-all',
                         active
                           ? 'w-5 opacity-100'
-                          : 'w-3 opacity-0 group-hover:opacity-40'
+                          : 'w-3 opacity-0 group-hover:opacity-40',
                       )}
                       aria-hidden
                     />
@@ -133,16 +229,18 @@ export function SiteHeader({ action }: SiteHeaderProps = {}) {
               })}
             </nav>
 
-            {action && (
-              <>
-                <span
-                  className="hidden h-5 w-px shrink-0 bg-border sm:block"
-                  aria-hidden
-                />
-                <div className="hidden shrink-0 sm:block">{action}</div>
-              </>
-            )}
+            <div className="hidden shrink-0 sm:block">
+              <ThemeToggle />
+            </div>
+            <span
+              className="hidden h-5 w-px shrink-0 bg-border sm:block"
+              aria-hidden
+            />
+            <div className="hidden shrink-0 sm:block">{accountAction}</div>
 
+            <div className="sm:hidden">
+              <ThemeToggle className="h-10 w-10" />
+            </div>
             <button
               ref={menuBtnRef}
               type="button"
@@ -209,7 +307,7 @@ export function SiteHeader({ action }: SiteHeaderProps = {}) {
                           'flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium transition-colors',
                           active
                             ? 'bg-brand-light text-brand-dark'
-                            : 'text-gray-700 hover:bg-gray-50 active:bg-gray-100'
+                            : 'text-gray-700 hover:bg-gray-50 active:bg-gray-100',
                         )}
                         onClick={closeMenu}
                       >
@@ -218,7 +316,7 @@ export function SiteHeader({ action }: SiteHeaderProps = {}) {
                             'flex h-9 w-9 items-center justify-center rounded-lg',
                             active
                               ? 'bg-brand text-white'
-                              : 'bg-surface text-muted'
+                              : 'bg-surface text-muted',
                           )}
                         >
                           <Icon className="h-4 w-4" aria-hidden />
@@ -230,16 +328,17 @@ export function SiteHeader({ action }: SiteHeaderProps = {}) {
                 })}
               </ul>
 
-              {action && (
-                <div className="mt-6 border-t border-border pt-4">
-                  <p className="mb-2 px-3 text-xs font-semibold uppercase tracking-wider text-muted">
-                    Administration
-                  </p>
-                  <div className="px-1" onClick={closeMenu}>
-                    {action}
+              <div className="mt-6 border-t border-border pt-4">
+                <p className="mb-2 px-3 text-xs font-semibold uppercase tracking-wider text-muted">
+                  {authed ? 'Compte' : 'Accès'}
+                </p>
+                <div className="flex items-center gap-2 px-1">
+                  <div className="min-w-0 flex-1" onClick={closeMenu}>
+                    {action ? action : <AccountButton compact />}
                   </div>
+                  <ThemeToggle />
                 </div>
-              )}
+              </div>
             </nav>
 
             <div className="border-t border-border px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] text-xs text-muted">

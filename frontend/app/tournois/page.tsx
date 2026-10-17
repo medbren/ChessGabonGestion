@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
 import { ArrowDownWideNarrow, ArrowUpWideNarrow, Calendar, Filter } from 'lucide-react';
 import { Footer } from '@/components/Footer';
 import { SiteHeader } from '@/components/SiteHeader';
@@ -160,7 +161,7 @@ export default function TournamentsPublicPage() {
                       'pill rounded-full border px-2.5 py-1 text-xs font-medium',
                       platform === f.id
                         ? 'border-brand bg-brand text-white shadow-sm'
-                        : 'border-border bg-white text-gray-600'
+                        : 'border-border bg-white text-gray-600',
                     )}
                   >
                     {f.label}
@@ -178,7 +179,7 @@ export default function TournamentsPublicPage() {
                       'pill rounded-full border px-2.5 py-1 text-xs font-medium',
                       cadence === f.id
                         ? 'border-brand bg-brand text-white shadow-sm'
-                        : 'border-border bg-white text-gray-600'
+                        : 'border-border bg-white text-gray-600',
                     )}
                   >
                     {f.label}
@@ -240,51 +241,56 @@ export default function TournamentsPublicPage() {
         )}
 
         {status === 'idle' && filtered.length > 0 && (
-          <ul className="space-y-3">
+          <ul className="stagger-children space-y-3">
             {filtered.map((t) => {
               const resultCount = Array.isArray(t.results) ? t.results.length : 0;
               const recent = isRecent(t.date);
               return (
-                <li
-                  key={t.id}
-                  className="group flex flex-col gap-3 rounded-xl border border-border bg-white p-4 shadow-sm transition hover:border-brand/30 hover:shadow-md sm:flex-row sm:items-center sm:justify-between"
-                >
-                  <div className="flex min-w-0 items-start gap-3">
-                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-brand-light text-brand">
-                      <Calendar className="h-5 w-5" aria-hidden />
-                    </div>
-                    <div className="min-w-0">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <p className="font-semibold text-gray-900 group-hover:text-brand">
-                          {t.name}
-                        </p>
-                        {recent && (
-                          <Badge variant="brand" className="text-[10px] uppercase tracking-wide">
-                            Récent
-                          </Badge>
-                        )}
+                <li key={t.id}>
+                  <Link
+                    href={`/tournois/${t.id}`}
+                    className="card-lift group flex flex-col gap-3 rounded-xl border border-border bg-white p-4 shadow-sm transition hover:border-brand/30 hover:shadow-md sm:flex-row sm:items-center sm:justify-between"
+                  >
+                    <div className="flex min-w-0 items-start gap-3">
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-brand-light text-brand">
+                        <Calendar className="h-5 w-5" aria-hidden />
                       </div>
-                      <p className="mt-0.5 text-xs text-muted">
-                        {formatDate(t.date)}
-                        {resultCount > 0 && (
-                          <>
-                            {' '}
-                            · {resultCount} résultat
-                            {resultCount !== 1 ? 's' : ''}
-                          </>
-                        )}
-                      </p>
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="font-semibold text-gray-900 group-hover:text-brand">
+                            {t.name}
+                          </p>
+                          {recent && (
+                            <Badge
+                              variant="brand"
+                              className="text-[10px] uppercase tracking-wide"
+                            >
+                              Récent
+                            </Badge>
+                          )}
+                        </div>
+                        <p className="mt-0.5 text-xs text-muted">
+                          {formatDate(t.date)}
+                          {resultCount > 0 && (
+                            <>
+                              {' '}
+                              · {resultCount} résultat
+                              {resultCount !== 1 ? 's' : ''}
+                            </>
+                          )}
+                        </p>
+                      </div>
                     </div>
-                  </div>
-                  <div className="flex flex-wrap gap-2 sm:justify-end">
-                    <Badge variant="blue">
-                      {PLATFORM_LABELS[t.platform as Platform] ?? t.platform}
-                    </Badge>
-                    <Badge variant="gray">
-                      {TIME_CONTROL_LABELS[t.timeControl as TimeControl] ??
-                        t.timeControl}
-                    </Badge>
-                  </div>
+                    <div className="flex flex-wrap gap-2 sm:justify-end">
+                      <Badge variant="blue">
+                        {PLATFORM_LABELS[t.platform as Platform] ?? t.platform}
+                      </Badge>
+                      <Badge variant="gray">
+                        {TIME_CONTROL_LABELS[t.timeControl as TimeControl] ??
+                          t.timeControl}
+                      </Badge>
+                    </div>
+                  </Link>
                 </li>
               );
             })}

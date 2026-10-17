@@ -4,6 +4,7 @@ import { UsersModule } from './users/users.module';
 import { TournamentsModule } from './tournaments/tournaments.module';
 import { RankingsModule } from './rankings/rankings.module';
 import { AuthModule } from './auth/auth.module';
+import { ChessComModule } from './chesscom/chesscom.module';
 
 @Module({
   imports: [
@@ -12,6 +13,7 @@ import { AuthModule } from './auth/auth.module';
     TournamentsModule,
     RankingsModule,
     AuthModule,
+    ChessComModule,
   ],
 })
 export class AppModule {}
