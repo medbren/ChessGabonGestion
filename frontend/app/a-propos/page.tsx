@@ -9,6 +9,7 @@ import {
   Upload,
   Users,
 } from 'lucide-react';
+import { ClubChessComCard } from '@/components/ClubChessComCard';
 import { Footer } from '@/components/Footer';
 import { SiteHeader } from '@/components/SiteHeader';
 
@@ -97,7 +98,7 @@ export default function AboutPage() {
                 <ExternalLink className="h-3 w-3 opacity-50" aria-hidden />
               </a>
               <a
-                href="https://www.chess.com/club/chess-gabon"
+                href="https://www.chess.com/club/chess-gabon-1"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="inline-flex items-center gap-1.5 rounded-full border border-border bg-surface px-3 py-1.5 text-xs font-medium text-gray-700 transition hover:border-brand hover:text-brand"
@@ -108,6 +109,8 @@ export default function AboutPage() {
             </div>
           </div>
         </div>
+
+        <ClubChessComCard />
 
         <section className="animate-fade-in-up mt-6 rounded-xl border border-border bg-white p-6 shadow-sm">
           <h2 className="text-base font-semibold text-gray-900">
