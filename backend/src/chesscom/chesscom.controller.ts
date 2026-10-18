@@ -4,6 +4,7 @@ import {
   Controller,
   Get,
   Post,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
@@ -12,6 +13,27 @@ import { ChessComService } from './chesscom.service';
 @Controller('chesscom')
 export class ChessComController {
   constructor(private service: ChessComService) {}
+
+  /**
+   * Public — parties d'un tournoi Chess.com (fetch live).
+   * Query : url= lien ou id tournoi Chess.com
+   */
+  @Get('tournament-games')
+  async tournamentGames(@Query('url') url?: string) {
+    if (!url?.trim()) {
+      throw new BadRequestException(
+        'Paramètre url requis (lien ou id du tournoi Chess.com).',
+      );
+    }
+    try {
+      const urlId = this.service.parseTournamentUrlId(url);
+      return await this.service.fetchTournamentGames(urlId);
+    } catch (e) {
+      if (e instanceof BadRequestException) throw e;
+      const msg = e instanceof Error ? e.message : 'Chargement impossible';
+      throw new BadRequestException(msg);
+    }
+  }
 
   /** Public — profil club pour /a-propos */
   @Get('club')
@@ -27,10 +49,6 @@ export class ChessComController {
     });
   }
 
-  /**
-   * Admin — charge le classement en temps réel (parties API, sans écriture DB)
-   * Body : { url: string }
-   */
   @Post('preview-tournament')
   @UseGuards(JwtAuthGuard)
   async previewTournament(@Body() body: { url?: string }) {

@@ -42,6 +42,7 @@ export default function TournamentList() {
     if (!editing) return;
     setLoading(true);
     const fd = new FormData(e.currentTarget);
+    const externalUrl = String(fd.get('externalUrl') ?? '').trim();
 
     try {
       const res = await apiFetch(`/tournaments/${editing.id}`, {
@@ -51,6 +52,7 @@ export default function TournamentList() {
           platform: fd.get('platform') as Platform,
           timeControl: fd.get('timeControl') as TimeControl,
           date: fd.get('date') as string,
+          externalUrl: externalUrl || null,
         }),
       });
 
@@ -559,7 +561,7 @@ const styles: Record<string, React.CSSProperties> = {
 
   async function deleteTournament(t: { id: number; name: string }) {
     const ok = confirm(
-      `Supprimer le tournoi « ${t.name} » ?\n\nTous les résultats associés seront effacés. Cette action est irréversible.`
+      `Supprimer le tournoi « ${t.name} » ?\n\nTous les résultats associés seront effacés. Cette action est irréversible.`,
     );
     if (!ok) return;
 
@@ -627,6 +629,15 @@ const styles: Record<string, React.CSSProperties> = {
               required
               disabled={loading}
             />
+            <Input
+              id="tl-externalUrl"
+              name="externalUrl"
+              type="url"
+              label="URL Chess.com / Lichess (optionnel)"
+              placeholder="https://www.chess.com/tournament/live/…"
+              defaultValue={editing.externalUrl ?? ''}
+              disabled={loading}
+            />
             <div className="flex gap-2">
               <Button type="submit" loading={loading}>
                 {loading ? 'Enregistrement…' : 'Enregistrer'}
@@ -674,7 +685,14 @@ const styles: Record<string, React.CSSProperties> = {
                   }
                 >
                   <td className="px-3 py-2.5 text-xs text-muted">{t.id}</td>
-                  <td className="px-3 py-2.5 font-medium">{t.name}</td>
+                  <td className="px-3 py-2.5">
+                    <p className="font-medium">{t.name}</p>
+                    {t.externalUrl ? (
+                      <p className="mt-0.5 max-w-[220px] truncate text-[11px] text-blue">
+                        {t.externalUrl.replace(/^https?:\/\/(www\.)?/, '')}
+                      </p>
+                    ) : null}
+                  </td>
                   <td className="px-3 py-2.5">
                     <Badge variant="blue">
                       {PLATFORM_LABELS[t.platform] ?? t.platform}

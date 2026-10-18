@@ -46,6 +46,7 @@ export class TournamentsController {
       platform: 'LICHESS' | 'CHESSCOM' | 'OTHER';
       timeControl: 'BULLET' | 'BLITZ' | 'RAPID' | 'CLASSICAL';
       date: string;
+      externalUrl?: string | null;
     },
   ) {
     return this.service.create(body);
@@ -61,6 +62,7 @@ export class TournamentsController {
       platform?: 'LICHESS' | 'CHESSCOM' | 'OTHER';
       timeControl?: 'BULLET' | 'BLITZ' | 'RAPID' | 'CLASSICAL';
       date?: string;
+      externalUrl?: string | null;
     },
   ) {
     return this.service.update(Number(id), body);

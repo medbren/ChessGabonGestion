@@ -68,6 +68,7 @@ export class TournamentsService {
     platform: 'LICHESS' | 'CHESSCOM' | 'OTHER';
     timeControl: 'BULLET' | 'BLITZ' | 'RAPID' | 'CLASSICAL';
     date: string;
+    externalUrl?: string | null;
   }) {
     return this.prisma.tournament.create({
       data: {
@@ -75,6 +76,7 @@ export class TournamentsService {
         platform: data.platform,
         timeControl: data.timeControl,
         date: new Date(data.date),
+        externalUrl: data.externalUrl?.trim() || null,
       },
     });
   }
@@ -86,16 +88,28 @@ export class TournamentsService {
       platform?: 'LICHESS' | 'CHESSCOM' | 'OTHER';
       timeControl?: 'BULLET' | 'BLITZ' | 'RAPID' | 'CLASSICAL';
       date?: string;
+      externalUrl?: string | null;
     },
   ) {
+    const payload: {
+      name?: string;
+      platform?: 'LICHESS' | 'CHESSCOM' | 'OTHER';
+      timeControl?: 'BULLET' | 'BLITZ' | 'RAPID' | 'CLASSICAL';
+      date?: Date;
+      externalUrl?: string | null;
+    } = {};
+
+    if (data.name !== undefined) payload.name = data.name;
+    if (data.platform !== undefined) payload.platform = data.platform;
+    if (data.timeControl !== undefined) payload.timeControl = data.timeControl;
+    if (data.date !== undefined) payload.date = new Date(data.date);
+    if (data.externalUrl !== undefined) {
+      payload.externalUrl = data.externalUrl?.trim() || null;
+    }
+
     return this.prisma.tournament.update({
-      where: {
-        id,
-      },
-      data: {
-        ...data,
-        date: data.date ? new Date(data.date) : undefined,
-      },
+      where: { id },
+      data: payload,
     });
   }
 
@@ -133,7 +147,9 @@ export class TournamentsService {
 
   delete(id: number) {
     return this.prisma.tournament.delete({
-      where: { id },
+      where: {
+        id,
+      },
     });
   }
 }
